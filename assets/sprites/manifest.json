@@ -1,0 +1,85 @@
+{
+  "jojo_walk": [
+    "assets/sprites/jojo_walk/walk_0.png",
+    "assets/sprites/jojo_walk/walk_1.png",
+    "assets/sprites/jojo_walk/walk_2.png",
+    "assets/sprites/jojo_walk/walk_3.png",
+    "assets/sprites/jojo_walk/walk_4.png",
+    "assets/sprites/jojo_walk/walk_5.png",
+    "assets/sprites/jojo_walk/walk_6.png",
+    "assets/sprites/jojo_walk/walk_7.png"
+  ],
+  "jojo_crawl": [
+    "assets/sprites/jojo_crawl/crawl_0.png",
+    "assets/sprites/jojo_crawl/crawl_1.png",
+    "assets/sprites/jojo_crawl/crawl_2.png",
+    "assets/sprites/jojo_crawl/crawl_3.png",
+    "assets/sprites/jojo_crawl/crawl_4.png",
+    "assets/sprites/jojo_crawl/crawl_5.png",
+    "assets/sprites/jojo_crawl/crawl_6.png",
+    "assets/sprites/jojo_crawl/crawl_7.png"
+  ],
+  "jojo_jump": [
+    "assets/sprites/jojo_jump/jump_0.png",
+    "assets/sprites/jojo_jump/jump_1.png",
+    "assets/sprites/jojo_jump/jump_2.png",
+    "assets/sprites/jojo_jump/jump_3.png",
+    "assets/sprites/jojo_jump/jump_4.png",
+    "assets/sprites/jojo_jump/jump_5.png"
+  ],
+  "jojo_stand": [
+    "assets/sprites/jojo_stand/stand_0.png"
+  ],
+  "jojo_bark": [
+    "assets/sprites/jojo_bark/bark_0.png",
+    "assets/sprites/jojo_bark/bark_1.png"
+  ],
+  "cat": {
+    "fat": {
+      "sit": "assets/cat/fat/cat_sit.png",
+      "swipe_left": "assets/cat/fat/cat_swipe_left.png",
+      "swipe_right": "assets/cat/fat/cat_swipe_right.png"
+    },
+    "mangy": {
+      "stand_1": "assets/sprites/cat/mangy/cat_stand_1.png",
+      "stand_2": "assets/sprites/cat/mangy/cat_stand_2.png",
+      "crouch": "assets/sprites/cat/mangy/cat_crouch.png",
+      "leap_1": "assets/sprites/cat/mangy/cat_leap_1.png",
+      "leap_2": "assets/sprites/cat/mangy/cat_leap_2.png",
+      "leap_3": "assets/sprites/cat/mangy/cat_leap_3.png",
+      "land": "assets/sprites/cat/mangy/cat_land.png",
+      "pounce_ready": "assets/sprites/cat/mangy/cat_pounce_ready.png"
+    },
+    "sit": "assets/cat/fat/cat_sit.png",
+    "swipe_left": "assets/cat/fat/cat_swipe_left.png",
+    "swipe_right": "assets/cat/fat/cat_swipe_right.png"
+  },
+  "squirrel": {
+    "popup": "assets/sprites/squirrel/sq_popup.png",
+    "holdup": "assets/sprites/squirrel/sq_holdup.png",
+    "throw": "assets/sprites/squirrel/sq_throw.png"
+  },
+  "items": {
+    "acorn": "assets/sprites/items/acorn.png",
+    "bacon": "assets/sprites/items/bacon.png",
+    "hole": "assets/sprites/items/hole.png",
+    "bench": "assets/sprites/items/bench.png"
+  },
+  "environment": {
+    "cloud_large": "assets/sprites/environment/cloud_large.png",
+    "cloud_small_1": "assets/sprites/environment/cloud_small_1.png",
+    "cloud_small_2": "assets/sprites/environment/cloud_small_2.png",
+    "bush_blue_berries": "assets/sprites/environment/bush_blue_berries.png",
+    "bush_pink_flowers": "assets/sprites/environment/bush_pink_flowers.png",
+    "bush_red_berries": "assets/sprites/environment/bush_red_berries.png",
+    "tree_pine": "assets/sprites/environment/tree_pine.png",
+    "tree_birch": "assets/sprites/environment/tree_birch.png",
+    "tree_oak": "assets/sprites/environment/tree_oak.png",
+    "tree_pine_birch_pair": "assets/sprites/environment/tree_pine_birch_pair.png",
+    "fence_wood": "assets/sprites/environment/fence_wood.png",
+    "grass_fringe": "assets/sprites/environment/grass_fringe.png",
+    "dirt_trail": "assets/sprites/environment/dirt_trail.png",
+    "soil_cutaway": "assets/sprites/environment/soil_cutaway.png",
+    "signpost_dogpark": "assets/sprites/environment/signpost_dogpark.png"
+  }
+}

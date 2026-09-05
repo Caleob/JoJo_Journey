@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JoJo's Journey - Browser Side-Scroller</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-wrapper">
+        <!-- Top HUD -->
+        <header class="hud">
+            <div class="hud-group">
+                <span id="hud-hearts" class="hud-hearts" title="Health">❤️❤️❤️</span>
+                <span class="hud-badge">🥓 <span id="hud-bacon">0</span></span>
+            </div>
+
+            <div class="hud-progress-container">
+                <span id="hud-distance" class="hud-distance-text">0 / 1000m</span>
+                <div class="hud-progress-bar">
+                    <div id="hud-progress-fill" class="hud-progress-fill"></div>
+                </div>
+            </div>
+
+            <div class="hud-group">
+                <span>SCORE: <span id="hud-score" style="color: #6ee7b7;">0</span></span>
+                <button id="btn-mute" class="btn-icon" title="Toggle Sound (M)">🔊</button>
+                <button id="btn-pause" class="btn-icon" title="Pause Game (P)">⏸️</button>
+                <button id="btn-fullscreen" class="btn-icon" title="Toggle Fullscreen (F)">⛶</button>
+            </div>
+        </header>
+
+        <!-- Canvas and Overlays -->
+        <main class="canvas-container">
+            <canvas id="gameCanvas" width="1000" height="520"></canvas>
+
+            <!-- Start Menu Overlay -->
+            <div id="menuOverlay" class="overlay">
+                <h1 class="title-banner">JOJO'S JOURNEY</h1>
+                <p class="subtitle">An 8-Bit Side-Scrolling Dog Adventure along the Wilderness Trail</p>
+
+                <div class="instructions-box">
+                    <div class="inst-item">
+                        <span class="key-badge">␣ SPACE / JUMP</span>
+                        <span>High leap over cats, holes & benches</span>
+                    </div>
+                    <div class="inst-item">
+                        <span class="key-badge">⬇️ DOWN / CRAWL</span>
+                        <span>Belly crawl under benches & flying nuts</span>
+                    </div>
+                    <div class="inst-item">
+                        <span class="key-badge">➡️ RIGHT / SURGE</span>
+                        <span>Slight speed surge forward</span>
+                    </div>
+                    <div class="inst-item">
+                        <span class="key-badge">⬅️ LEFT / SLOW</span>
+                        <span>Slight brake / ease back</span>
+                    </div>
+                    <div class="inst-item" style="grid-column: 1 / -1; justify-content: center; border-top: 1px dashed #334155; padding-top: 6px; margin-top: 2px;">
+                        <span class="key-badge">F</span> Fullscreen &nbsp;|&nbsp; <span class="key-badge">P</span> Pause &nbsp;|&nbsp; <span class="key-badge">M</span> Mute Sound
+                    </div>
+                </div>
+
+                <div class="difficulty-select">
+                    <button class="diff-btn diff-easy" onclick="window.jojoGame.startGame('easy')">
+                        🟢 EASY (1000m)
+                    </button>
+                    <button class="diff-btn diff-medium" onclick="window.jojoGame.startGame('medium')">
+                        🟡 MEDIUM (1000m)
+                    </button>
+                    <button class="diff-btn diff-hard" onclick="window.jojoGame.startGame('hard')">
+                        🔴 HARD (1000m)
+                    </button>
+                    <button class="diff-btn diff-endless" onclick="window.jojoGame.startGame('endless')">
+                        ♾️ ENDLESS RUN
+                    </button>
+                </div>
+            </div>
+
+            <!-- Pause Overlay -->
+            <div id="pauseOverlay" class="overlay hidden">
+                <div class="modal-card">
+                    <h2>GAME PAUSED</h2>
+                    <p style="color: #94a3b8; margin-bottom: 20px;">Press 'P' or click Resume to continue.</p>
+                    <button class="modal-btn" onclick="window.jojoGame.togglePause()">RESUME</button>
+                    <button class="modal-btn secondary" onclick="window.location.reload()">MAIN MENU</button>
+                </div>
+            </div>
+
+            <!-- Victory Overlay (1000m Goal Reached) -->
+            <div id="victoryOverlay" class="overlay hidden">
+                <div class="modal-card" style="max-width: 580px;">
+                    <h2>🎉 YOU MADE IT! 🎉</h2>
+                    <img src="assets/sprites/environment/victory_newspaper.png" alt="Victory Newspaper" style="width: 100%; max-width: 480px; border-radius: 6px; margin: 10px auto; border: 3px solid #334155; display: block;" />
+                    <p style="color: #6ee7b7; font-weight: bold; margin-bottom: 12px;">JoJo braved the wild trail and arrived safely at the Dog Park!</p>
+                    <div class="modal-stats">
+                        <div>DIFFICULTY: <span id="vic-difficulty" style="color: #fef08a;">MEDIUM</span></div>
+                        <div>FINAL SCORE: <span id="vic-score" style="color: #38bdf8;">0</span></div>
+                        <div>BACON COLLECTED: <span id="vic-bacon" style="color: #f43f5e;">0</span> 🥓</div>
+                    </div>
+                    <button class="modal-btn" onclick="window.jojoGame.startGame(window.jojoGame.difficulty)">PLAY AGAIN</button>
+                    <button class="modal-btn secondary" onclick="window.jojoGame.startGame('endless')">TRY ENDLESS</button>
+                </div>
+            </div>
+
+            <!-- Game Over Overlay -->
+            <div id="gameoverOverlay" class="overlay hidden">
+                <div class="modal-card gameover-card">
+                    <div class="poster-zoom-viewport">
+                        <img id="missingDogPoster" src="assets/sprites/environment/missing_dog_poster.png" alt="Missing Dog Poster" class="poster-zooming-img" />
+                    </div>
+                    <h2 class="gameover-title">TRY AGAIN?</h2>
+                    <button class="modal-btn monster-btn" onclick="window.jojoGame.returnToMenu()">
+                        Of Course! I'm not a Monster
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="game.bundle.js"></script>
+    <script>
+        // Header buttons wiring
+        document.getElementById('btn-mute').addEventListener('click', () => {
+            if (window.jojoGame) window.jojoGame.toggleMute();
+        });
+        document.getElementById('btn-pause').addEventListener('click', () => {
+            if (window.jojoGame) window.jojoGame.togglePause();
+        });
+        document.getElementById('btn-fullscreen').addEventListener('click', () => {
+            if (window.jojoGame) window.jojoGame.toggleFullscreen();
+        });
+    </script>
+</body>
+</html>
