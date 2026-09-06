@@ -713,7 +713,6 @@ export class Game {
                     const safeUnderBench = obs.onBench && this.player.state === 'CRAWL' && this.player.y >= this.player.groundY - 10;
                     if (!safeUnderBench) {
                         this.player.takeDamage();
-                        this.addParticle(this.player.x + 40, this.player.y - 40, '#ff4d4d');
                     }
                 }
             } else if (obs.type === 'squirrel') {
