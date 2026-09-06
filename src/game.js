@@ -41,6 +41,10 @@ export class Game {
         this.currentSpeed = 5.6;
         this.spawnTimer = 80;
 
+        // Menu difficulty keyboard navigation ('endless' selected by default)
+        this.menuDifficulties = ['easy', 'medium', 'hard', 'endless'];
+        this.selectedDifficultyIndex = 3;
+
         // Inputs
         this.keys = {};
         this.setupInputs();
@@ -107,6 +111,8 @@ export class Game {
         await sprites.loadAll();
         this.resetGame();
         this.setupControlCycle();
+        this.setupMenuDifficultyNavigation();
+        this.updateDifficultyHighlight();
         this.renderCurrentEnemy();
         this.startLoop();
     }
@@ -120,6 +126,22 @@ export class Game {
 
             this.keys[e.code] = true;
             sounds.init();
+
+            // Menu Keyboard Navigation
+            if (this.state === 'MENU') {
+                if (e.code === 'ArrowLeft') {
+                    this.navigateMenuDifficulty(-1);
+                    return;
+                }
+                if (e.code === 'ArrowRight') {
+                    this.navigateMenuDifficulty(1);
+                    return;
+                }
+                if (e.code === 'Enter' || e.code === 'NumpadEnter') {
+                    this.startGame(this.menuDifficulties[this.selectedDifficultyIndex]);
+                    return;
+                }
+            }
 
             if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
                 if (this.state === 'PLAYING') {
@@ -234,6 +256,34 @@ export class Game {
         if (tipEl) tipEl.innerHTML = `<strong>Survival Tip:</strong> ${item.tip}`;
     }
 
+    setupMenuDifficultyNavigation() {
+        const diffButtons = document.querySelectorAll('.diff-btn');
+        diffButtons.forEach((btn, index) => {
+            btn.addEventListener('mouseenter', () => {
+                this.selectedDifficultyIndex = index;
+                this.updateDifficultyHighlight();
+            });
+        });
+    }
+
+    navigateMenuDifficulty(direction) {
+        if (this.state !== 'MENU') return;
+        const len = this.menuDifficulties.length;
+        this.selectedDifficultyIndex = (this.selectedDifficultyIndex + direction + len) % len;
+        this.updateDifficultyHighlight();
+    }
+
+    updateDifficultyHighlight() {
+        const diffButtons = document.querySelectorAll('.diff-btn');
+        diffButtons.forEach((btn, index) => {
+            if (index === this.selectedDifficultyIndex) {
+                btn.classList.add('selected-diff');
+            } else {
+                btn.classList.remove('selected-diff');
+            }
+        });
+    }
+
     resetGame() {
         this.distance = 0;
         this.score = 0;
@@ -255,8 +305,15 @@ export class Game {
         this.updateHUD();
     }
 
-    startGame(difficulty = 'medium') {
+    startGame(difficulty = 'endless') {
+        if (!difficulty) {
+            difficulty = this.menuDifficulties[this.selectedDifficultyIndex] || 'endless';
+        }
         this.difficulty = difficulty;
+        const diffIdx = this.menuDifficulties.indexOf(difficulty);
+        if (diffIdx !== -1) {
+            this.selectedDifficultyIndex = diffIdx;
+        }
         this.keys = {}; // Clear inputs
         this.resetGame();
 
@@ -313,6 +370,8 @@ export class Game {
         this.hideAllOverlays();
         const menu = document.getElementById('menuOverlay');
         if (menu) menu.classList.remove('hidden');
+        this.selectedDifficultyIndex = 3; // Reset highlight to 'endless'
+        this.updateDifficultyHighlight();
         this.startControlCycle();
     }
 

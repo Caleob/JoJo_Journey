@@ -135,7 +135,7 @@
 
                     <!-- Large Difficulty Selection Cards -->
                     <div class="difficulty-select">
-                        <button class="diff-btn diff-easy" onclick="window.jojoGame.startGame('easy')">
+                        <button class="diff-btn diff-easy" data-diff="easy" onclick="window.jojoGame.startGame('easy')">
                             <div class="diff-btn-header">
                                 <span class="diff-icon">🟢</span>
                                 <span class="diff-name">EASY</span>
@@ -143,7 +143,7 @@
                             <span class="diff-goal">1000m Goal</span>
                             <span class="diff-desc">Gentle jog & relaxed hazards</span>
                         </button>
-                        <button class="diff-btn diff-medium" onclick="window.jojoGame.startGame('medium')">
+                        <button class="diff-btn diff-medium" data-diff="medium" onclick="window.jojoGame.startGame('medium')">
                             <div class="diff-btn-header">
                                 <span class="diff-icon">🟡</span>
                                 <span class="diff-name">MEDIUM</span>
@@ -151,7 +151,7 @@
                             <span class="diff-goal">1000m Goal</span>
                             <span class="diff-desc">Classic arcade trail challenge</span>
                         </button>
-                        <button class="diff-btn diff-hard" onclick="window.jojoGame.startGame('hard')">
+                        <button class="diff-btn diff-hard" data-diff="hard" onclick="window.jojoGame.startGame('hard')">
                             <div class="diff-btn-header">
                                 <span class="diff-icon">🔴</span>
                                 <span class="diff-name">HARD</span>
@@ -159,7 +159,7 @@
                             <span class="diff-goal">1000m Goal</span>
                             <span class="diff-desc">Fierce speed & aggressive cats</span>
                         </button>
-                        <button class="diff-btn diff-endless" onclick="window.jojoGame.startGame('endless')">
+                        <button class="diff-btn diff-endless selected-diff" data-diff="endless" onclick="window.jojoGame.startGame('endless')">
                             <div class="diff-btn-header">
                                 <span class="diff-icon">♾️</span>
                                 <span class="diff-name">ENDLESS</span>
@@ -167,6 +167,11 @@
                             <span class="diff-goal">No Limit</span>
                             <span class="diff-desc">Survive the ultimate marathon</span>
                         </button>
+                    </div>
+
+                    <div class="menu-nav-instructions">
+                        <span class="nav-hint-pill">Use ◀ Left / Right ▶ to select</span>
+                        <span class="nav-hint-pill">Press <span class="nav-key-tag">ENTER</span> or Click to Start</span>
                     </div>
                 </div>
             </div>
@@ -184,9 +189,7 @@
             <!-- Victory Overlay (1000m Goal Reached) -->
             <div id="victoryOverlay" class="overlay hidden">
                 <div class="modal-card victory-card">
-                    <h2>🎉 YOU MADE IT! 🎉</h2>
                     <img src="assets/sprites/environment/victory_newspaper.png" alt="Victory Newspaper" class="victory-newspaper-img" />
-                    <p class="victory-subtitle">JoJo braved the wild trail and arrived safely at the Dog Park!</p>
                     <div class="play-again-prompt">Play Again?</div>
                     <button class="modal-btn victory-action-btn" onclick="window.jojoGame.returnToMenu()">
                         Absolutely! That was fun!
