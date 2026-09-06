@@ -30,12 +30,12 @@ export class Game {
         this.distance = 0; // meters traveled
         this.score = 0;
 
-        // Difficulty configs (Faster speeds & more enemies across all levels)
+        // Difficulty configs (Equalized bacon frequency across levels, with Easy vs Difficult balancing)
         this.diffConfigs = {
-            easy: { baseSpeed: 4.4, spawnMin: 140, spawnMax: 195, baconRate: 0.30 },
-            medium: { baseSpeed: 5.6, spawnMin: 100, spawnMax: 145, baconRate: 0.22 },
-            hard: { baseSpeed: 7.2, spawnMin: 70, spawnMax: 110, baconRate: 0.15 },
-            endless: { baseSpeed: 5.0, spawnMin: 90, spawnMax: 135, baconRate: 0.20 }
+            easy: { baseSpeed: 4.4, spawnMin: 140, spawnMax: 195, baconRate: 0.55, difficultBaconChance: 0.15 },
+            medium: { baseSpeed: 5.6, spawnMin: 100, spawnMax: 145, baconRate: 0.55, difficultBaconChance: 0.55 },
+            hard: { baseSpeed: 7.2, spawnMin: 70, spawnMax: 110, baconRate: 0.55, difficultBaconChance: 0.90 },
+            endless: { baseSpeed: 5.0, spawnMin: 90, spawnMax: 135, baconRate: 0.55, difficultBaconChance: 0.35 }
         };
 
         this.currentSpeed = 5.6;
@@ -55,6 +55,9 @@ export class Game {
         // Victory celebration elements
         this.victoryBannerX = -999;
         this.showVictoryModal = false;
+        this.winPhase = null;
+        this.winTimer = 0;
+        this.winFadeAlpha = 0.0;
 
         // Interactive Controls Card Cycling
         this.controlCycleTimer = null;
@@ -124,6 +127,20 @@ export class Game {
                 e.preventDefault();
             }
 
+            // If in cinematic win sequence, user has lost control
+            if (this.winPhase !== null) {
+                if (e.code === 'KeyM') {
+                    this.toggleMute();
+                }
+                if (e.code === 'KeyF') {
+                    this.toggleFullscreen();
+                }
+                if ((e.code === 'Enter' || e.code === 'NumpadEnter') && this.state === 'STAGE_CLEAR') {
+                    this.returnToMenu();
+                }
+                return;
+            }
+
             this.keys[e.code] = true;
             sounds.init();
 
@@ -170,6 +187,7 @@ export class Game {
         });
 
         window.addEventListener('keyup', (e) => {
+            if (this.winPhase !== null) return;
             this.keys[e.code] = false;
         });
 
@@ -293,6 +311,9 @@ export class Game {
         this.particles = [];
         this.victoryBannerX = -999;
         this.showVictoryModal = false;
+        this.winPhase = null;
+        this.winTimer = 0;
+        this.winFadeAlpha = 0.0;
         this.keys = {}; // Clear any stuck input keys
         this.spawnTimer = 80;
 
@@ -332,6 +353,7 @@ export class Game {
     }
 
     togglePause() {
+        if (this.winPhase !== null) return;
         if (this.state === 'PLAYING') {
             this.state = 'PAUSED';
             if (sounds.bgMusic) {
@@ -358,7 +380,10 @@ export class Game {
     hideAllOverlays() {
         ['menuOverlay', 'pauseOverlay', 'victoryOverlay', 'gameoverOverlay'].forEach(id => {
             const el = document.getElementById(id);
-            if (el) el.classList.add('hidden');
+            if (el) {
+                el.classList.add('hidden');
+                el.classList.remove('fade-in-from-black');
+            }
         });
     }
 
@@ -381,7 +406,19 @@ export class Game {
         const edgeGroundY = 410;            // 410: Upper edge of the path for squirrels
         const config = this.diffConfigs[this.difficulty];
 
-        // Random roll for obstacle type (Dense, action-packed enemy frequency):
+        // Determine if bacon rolls and whether it is Easy or Difficult
+        let difficultChance = config.difficultBaconChance;
+        if (this.difficulty === 'endless') {
+            // Endless scales smoothly from 0.20 at 0m to 0.95 at 1000m+
+            const progress = Math.min(1.0, this.distance / 1000);
+            difficultChance = 0.20 + progress * 0.75;
+        }
+
+        const baconRate = config.baconRate || 0.55;
+        const wantsBacon = Math.random() < baconRate;
+        const isDifficult = wantsBacon && (Math.random() < difficultChance);
+
+        // Random roll for obstacle type:
         // 0: Bench (frequently with Cat or Bacon)
         // 1: Hole (with floating bacon incentive)
         // 2: Squirrel on path edge (arced acorns, 30% follow-up throw from behind)
@@ -394,8 +431,10 @@ export class Game {
             this.obstacles.push(bench);
 
             // 60% chance of a cat (fat or mangy) sitting squarely on the bench seat plank!
-            if (Math.random() < 0.60) {
-                const catBreed = Math.random() < 0.5 ? 'fat' : 'mangy';
+            const hasCat = Math.random() < 0.60;
+            let catBreed = null;
+            if (hasCat) {
+                catBreed = Math.random() < 0.5 ? 'fat' : 'mangy';
                 const catX = bench.x + (bench.width - 85) / 2;
                 const catY = bench.y + bench.seatOffset;
                 const cat = catBreed === 'mangy'
@@ -403,22 +442,68 @@ export class Game {
                     : new FatCat(catX, catY, true, bench);
                 this.obstacles.push(cat);
                 bench.hasCat = true;
-            } else {
-                // Bacon on bench seat
-                this.items.push(new Bacon(x + bench.width / 2, bench.y + bench.seatOffset - 25));
+            }
+
+            if (wantsBacon) {
+                if (hasCat) {
+                    if (isDifficult) {
+                        // High-skill bacon:
+                        // High vaulting bacon centered directly over the cat (reachable ONLY by jumping/vaulting off the bench seat),
+                        // OR deep under the bench (reachable ONLY by crawling under beneath the cat).
+                        if (catBreed === 'fat' || Math.random() < 0.70) {
+                            // Vaulting bacon directly over the cat at y = 125
+                            this.items.push(new Bacon(x + bench.width / 2 - 19, 125));
+                        } else {
+                            // Clearly under the bench: hugging the ground under seat plank
+                            this.items.push(new Bacon(x + bench.width * 0.45, groundY - 55));
+                        }
+                    } else {
+                        // Easy bacon: placed comfortably on open ground before the bench
+                        this.items.push(new Bacon(x - 80, groundY - 70));
+                    }
+                } else {
+                    // Empty bench (no cat)
+                    if (isDifficult) {
+                        const subRoll = Math.random();
+                        if (subRoll < 0.40) {
+                            // Clearly under the bench: hugging ground under seat plank (missed if walking on top)
+                            this.items.push(new Bacon(x + bench.width * 0.45, groundY - 55));
+                        } else if (subRoll < 0.80) {
+                            // Clearly on top of the bench: sitting high on seat/backrest (missed if crawling under)
+                            this.items.push(new Bacon(x + bench.width * 0.45, bench.y + bench.seatOffset - 84));
+                        } else {
+                            // Vaulting bacon high in the air above bench (requires jump off bench)
+                            this.items.push(new Bacon(x + bench.width / 2 - 19, 125));
+                        }
+                    } else {
+                        // Easy bacon: dual-accessible at seat plank height (collected whether crawling under OR walking on top)
+                        this.items.push(new Bacon(x + bench.width * 0.45, bench.y + bench.seatOffset - 25));
+                    }
+                }
             }
         } else if (roll < 0.50) {
             // Spawn Pit Hole
             this.obstacles.push(new Hole(x, groundY));
-            // 50% chance of bacon floating over hole to reward skilled jump
-            if (Math.random() < 0.50) {
-                this.items.push(new Bacon(x + 60, groundY - 110));
+            if (wantsBacon) {
+                if (isDifficult) {
+                    // Difficult bacon: floating directly over the pit hole, requiring a timed jump across the chasm
+                    this.items.push(new Bacon(x + 60, groundY - 110));
+                } else {
+                    // Easy bacon: safely positioned on open ground before the pit hole
+                    this.items.push(new Bacon(x - 70, groundY - 70));
+                }
             }
         } else if (roll < 0.78) {
             // Spawn Squirrel on the upper path edge
             this.obstacles.push(new Squirrel(x, edgeGroundY));
-            if (Math.random() < 0.30) {
-                this.items.push(new Bacon(x + 120, groundY - 70));
+            if (wantsBacon) {
+                if (isDifficult) {
+                    // Difficult bacon: elevated in acorn trajectory, requiring jumping while dodging acorns
+                    this.items.push(new Bacon(x + 100, groundY - 125));
+                } else {
+                    // Easy bacon: placed on ground
+                    this.items.push(new Bacon(x + 120, groundY - 70));
+                }
             }
         } else {
             // Ground Cat (fat or mangy) walking along the path
@@ -427,8 +512,14 @@ export class Game {
                 ? new MangyCat(x, groundY, false, null, this.difficulty)
                 : new FatCat(x, groundY, false, null);
             this.obstacles.push(cat);
-            if (Math.random() < 0.35) {
-                this.items.push(new Bacon(x + 80, groundY - 100));
+            if (wantsBacon) {
+                if (isDifficult) {
+                    // Difficult bacon: directly near/above the stationary cat (swiping claw danger)
+                    this.items.push(new Bacon(x + 75, groundY - 100));
+                } else {
+                    // Easy bacon: positioned safely ahead on open ground before the cat
+                    this.items.push(new Bacon(x - 90, groundY - 70));
+                }
             }
         }
 
@@ -439,6 +530,9 @@ export class Game {
                 this.obstacles.push(new Squirrel(comboX, edgeGroundY));
             } else {
                 this.obstacles.push(new Hole(comboX, groundY));
+                if (Math.random() < 0.50) {
+                    this.items.push(new Bacon(comboX + 60, groundY - 110));
+                }
             }
         }
 
@@ -462,6 +556,19 @@ export class Game {
         }
     }
 
+    startWinSequence() {
+        this.winPhase = 'WALK_OUT';
+        this.winTimer = 0;
+        this.winFadeAlpha = 0.0;
+        this.keys = {}; // Relinquish player control
+        this.player.invulnerableTimer = 99999;
+        this.player.currentPlatform = null;
+        this.player.isGrounded = true;
+        this.player.y = this.player.groundY;
+        this.player.vy = 0;
+        sounds.fadeOutMusic(1500);
+    }
+
     update() {
         if (this.state !== 'PLAYING') return;
 
@@ -477,6 +584,64 @@ export class Game {
 
         if (this.player.isDead) {
             this.gameOver();
+            return;
+        }
+
+        // Win Transition Sequence: Phase 1 (Walk Out) & Phase 2 (Joy Hop)
+        if (this.winPhase === 'WALK_OUT') {
+            this.winTimer++;
+            const config = this.diffConfigs[this.difficulty] || this.diffConfigs['medium'];
+            const scrollSpeed = config.baseSpeed * 0.85;
+            this.currentSpeed = scrollSpeed;
+
+            // 1. Update World parallax and signpost
+            this.world.update(scrollSpeed);
+            this.victoryBannerX -= scrollSpeed;
+            this.distance = Math.min(this.goalDistance, this.distance + scrollSpeed * 0.04);
+
+            // 2. JoJo walks smoothly forward past the finish line marker
+            this.player.isGrounded = true;
+            this.player.isCrawlingUnderBench = false;
+            this.player.state = 'WALK';
+            this.player.update({}, [], scrollSpeed);
+            this.player.x += 0.8;
+
+            // 3. Move remaining obstacles harmlessly offscreen
+            for (let i = this.obstacles.length - 1; i >= 0; i--) {
+                const obs = this.obstacles[i];
+                obs.update(scrollSpeed);
+                if (obs.isOffscreen()) {
+                    this.obstacles.splice(i, 1);
+                }
+            }
+
+            // 4. Update HUD
+            this.updateHUD();
+
+            // When JoJo has walked a few steps (~1.2s), transition to joy hopping
+            if (this.winTimer >= 72) {
+                this.winPhase = 'JOY_HOP';
+                this.winTimer = 0;
+                this.player.startVictoryJoy();
+                this.currentSpeed = 0;
+            }
+            return;
+        }
+
+        if (this.winPhase === 'JOY_HOP') {
+            this.winTimer++;
+            this.currentSpeed = 0;
+
+            // JoJo makes small hops back and forth in joy using stand_0
+            this.player.update({}, [], 0);
+
+            // Screen fades to black over ~75 frames
+            this.winFadeAlpha = Math.min(1.0, this.winTimer / 75);
+
+            // Once fully black, show victory screen and fade in victory music
+            if (this.winTimer >= 90 && this.winFadeAlpha >= 1.0) {
+                this.stageClear();
+            }
             return;
         }
 
@@ -518,8 +683,8 @@ export class Game {
                 this.victoryBannerX = this.canvas.width + 100;
             }
             this.victoryBannerX -= scrollSpeed;
-            if (this.victoryBannerX < this.player.x + 40) {
-                this.stageClear();
+            if (this.victoryBannerX < this.player.x + 40 && this.winPhase === null) {
+                this.startWinSequence();
                 return;
             }
         }
@@ -542,8 +707,8 @@ export class Game {
                 obs.update(scrollSpeed, this.player.x, this.player.y, this.particles);
                 const catBox = obs.getHitbox();
 
-                // Check collision with cat
-                if (this.boxesOverlap(playerBox, catBox)) {
+                // Check collision with cat (immune during win sequence)
+                if (this.winPhase === null && this.boxesOverlap(playerBox, catBox)) {
                     // Safe if cat is on bench and player is crawling underneath
                     const safeUnderBench = obs.onBench && this.player.state === 'CRAWL' && this.player.y >= this.player.groundY - 10;
                     if (!safeUnderBench) {
@@ -555,7 +720,7 @@ export class Game {
                 obs.update(scrollSpeed, this.player.x, this.acorns);
             } else if (obs.type === 'hole') {
                 obs.update(scrollSpeed);
-                if (obs.checkCollision(this.player)) {
+                if (this.winPhase === null && obs.checkCollision(this.player)) {
                     this.currentSpeed = 0;
                     this.player.fallIntoHole(obs);
                     this.addParticle(this.player.x + 40, this.player.groundY, '#5c4838');
@@ -574,7 +739,7 @@ export class Game {
             const acorn = this.acorns[i];
             acorn.update(scrollSpeed);
 
-            if (this.boxesOverlap(playerBox, acorn.getHitbox())) {
+            if (this.winPhase === null && this.boxesOverlap(playerBox, acorn.getHitbox())) {
                 this.player.takeDamage();
                 this.addParticle(acorn.x, acorn.y, '#b87431');
                 this.acorns.splice(i, 1);
@@ -636,12 +801,19 @@ export class Game {
 
     stageClear() {
         this.state = 'STAGE_CLEAR';
-        sounds.stopMusic();
-        sounds.playVictory();
+        this.winPhase = 'STAGE_CLEAR';
         this.keys = {}; // Reset all input keys
 
+        // Upbeat victory music fades in as victory screen fades in from black
+        sounds.fadeInVictory(1400);
+
         const vicOverlay = document.getElementById('victoryOverlay');
-        if (vicOverlay) vicOverlay.classList.remove('hidden');
+        if (vicOverlay) {
+            vicOverlay.classList.remove('hidden');
+            vicOverlay.classList.remove('fade-in-from-black');
+            void vicOverlay.offsetWidth;
+            vicOverlay.classList.add('fade-in-from-black');
+        }
 
         const diffEl = document.getElementById('vic-difficulty');
         if (diffEl) diffEl.textContent = this.difficulty.toUpperCase();
@@ -745,6 +917,14 @@ export class Game {
             this.ctx.fillRect(p.x, p.y, p.size, p.size);
         }
         this.ctx.globalAlpha = 1.0;
+
+        // 8. Cinematic Screen Fade to Black
+        if (this.winFadeAlpha > 0) {
+            this.ctx.fillStyle = '#000000';
+            this.ctx.globalAlpha = Math.min(1.0, Math.max(0.0, this.winFadeAlpha));
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            this.ctx.globalAlpha = 1.0;
+        }
     }
 
     drawFinishGate(ctx, x) {

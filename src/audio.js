@@ -5,6 +5,8 @@ class SoundManager {
         this.ctx = null;
         this.muted = localStorage.getItem('jojo_muted') === 'true';
         this.musicPlaying = false;
+        this.bgFadeInterval = null;
+        this.victoryFadeInterval = null;
 
         // Music Tracks
         try {
@@ -34,7 +36,19 @@ class SoundManager {
         }
     }
 
+    clearFades() {
+        if (this.bgFadeInterval) {
+            clearInterval(this.bgFadeInterval);
+            this.bgFadeInterval = null;
+        }
+        if (this.victoryFadeInterval) {
+            clearInterval(this.victoryFadeInterval);
+            this.victoryFadeInterval = null;
+        }
+    }
+
     stopJingles() {
+        this.clearFades();
         if (this.happyMusic) {
             try {
                 this.happyMusic.pause();
@@ -53,6 +67,7 @@ class SoundManager {
         this.muted = !this.muted;
         localStorage.setItem('jojo_muted', this.muted);
         if (this.muted) {
+            this.clearFades();
             if (this.bgMusic) {
                 try { this.bgMusic.pause(); } catch (e) {}
             }
@@ -235,7 +250,90 @@ class SoundManager {
         }
     }
 
+    fadeOutMusic(durationMs = 1500) {
+        if (!this.bgMusic || this.muted) {
+            this.stopMusic();
+            return;
+        }
+        if (this.bgFadeInterval) {
+            clearInterval(this.bgFadeInterval);
+            this.bgFadeInterval = null;
+        }
+
+        const startVol = this.bgMusic.volume;
+        if (startVol <= 0) {
+            this.stopMusic();
+            return;
+        }
+
+        const interval = 40;
+        const steps = Math.max(1, Math.floor(durationMs / interval));
+        let step = 0;
+
+        this.bgFadeInterval = setInterval(() => {
+            step++;
+            const progress = step / steps;
+            const newVol = Math.max(0, startVol * (1 - progress));
+            if (this.bgMusic) {
+                this.bgMusic.volume = newVol;
+            }
+            if (step >= steps || newVol <= 0) {
+                if (this.bgFadeInterval) {
+                    clearInterval(this.bgFadeInterval);
+                    this.bgFadeInterval = null;
+                }
+                this.stopMusic();
+                if (this.bgMusic) {
+                    this.bgMusic.volume = 0.60; // Reset for next game
+                }
+            }
+        }, interval);
+    }
+
+    fadeInVictory(durationMs = 1400, targetVolume = 0.80) {
+        this.clearFades();
+        this.stopMusic();
+        this.stopJingles();
+        if (this.muted) return;
+        this.init();
+
+        if (this.happyMusic) {
+            try {
+                this.happyMusic.currentTime = 0;
+                this.happyMusic.volume = 0;
+                const playPromise = this.happyMusic.play();
+                if (playPromise) {
+                    playPromise.catch(e => console.warn('Happy song playback prevented:', e));
+                }
+
+                const interval = 40;
+                const steps = Math.max(1, Math.floor(durationMs / interval));
+                let step = 0;
+
+                this.victoryFadeInterval = setInterval(() => {
+                    step++;
+                    const progress = Math.min(1.0, step / steps);
+                    if (this.happyMusic && !this.muted) {
+                        this.happyMusic.volume = targetVolume * progress;
+                    }
+                    if (step >= steps) {
+                        if (this.happyMusic && !this.muted) {
+                            this.happyMusic.volume = targetVolume;
+                        }
+                        if (this.victoryFadeInterval) {
+                            clearInterval(this.victoryFadeInterval);
+                            this.victoryFadeInterval = null;
+                        }
+                    }
+                }, interval);
+            } catch (e) {
+                console.warn(e);
+            }
+        }
+    }
+
     stopMusic() {
+        this.clearFades();
         this.musicPlaying = false;
         if (this.bgMusic) {
             try {

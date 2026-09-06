@@ -49,6 +49,8 @@ export class Player {
         this.baconCount = 0;
         this.settleDelayTimer = 0;
         this.isCrawlingUnderBench = false;
+        this.joyHopTimer = 0;
+        this.joyBaseX = this.x;
     }
 
     reset() {
@@ -73,6 +75,8 @@ export class Player {
         this.animTimer = 0;
         this.walkFrame = 0;
         this.crawlFrame = 0;
+        this.joyHopTimer = 0;
+        this.joyBaseX = this.targetX;
     }
 
     jump() {
@@ -125,9 +129,45 @@ export class Player {
         sounds.playBacon();
     }
 
+    startVictoryJoy() {
+        this.state = 'VICTORY_JOY';
+        this.isGrounded = true;
+        this.currentPlatform = null;
+        this.vy = 0;
+        this.y = this.groundY;
+        this.joyHopTimer = 0;
+        this.joyBaseX = this.x;
+        this.isCrawlingUnderBench = false;
+    }
+
     update(keys, obstacles, gameSpeed) {
         if (this.isFallingInHole) {
             this.holeFallTimer--;
+            return;
+        }
+
+        if (this.state === 'VICTORY_JOY') {
+            this.joyHopTimer++;
+            const hopPeriod = 22; // ~0.36s per hop cycle
+            const hopPhase = (this.joyHopTimer % hopPeriod) / hopPeriod;
+            const hopIndex = Math.floor(this.joyHopTimer / hopPeriod);
+
+            // Sine parabolic bounce
+            const hopHeight = 22;
+            const hopOffsetY = Math.sin(hopPhase * Math.PI) * hopHeight;
+            this.y = this.groundY - hopOffsetY;
+
+            // Small hops back and forth:
+            // Hop 0: hops slightly forward, Hop 1: hops back, Hop 2: forward, Hop 3: back
+            const hopDir = (hopIndex % 2 === 0) ? 1 : -1;
+            const hopDistance = 12;
+            const hopOffsetX = Math.sin(hopPhase * Math.PI) * hopDistance * hopDir;
+            this.x = this.joyBaseX + hopOffsetX;
+
+            // Soft landing sound when touching down
+            if (this.joyHopTimer > 0 && this.joyHopTimer % hopPeriod === 0) {
+                sounds.playStep();
+            }
             return;
         }
 
@@ -323,8 +363,8 @@ export class Player {
     }
 
     draw(ctx) {
-        // Flicker if invulnerable
-        if (this.invulnerableTimer > 0 && Math.floor(this.invulnerableTimer / 5) % 2 === 0) {
+        // Flicker if invulnerable (do not flicker during victory sequences)
+        if (this.state !== 'VICTORY_JOY' && this.invulnerableTimer > 0 && this.invulnerableTimer < 9000 && Math.floor(this.invulnerableTimer / 5) % 2 === 0) {
             return;
         }
 
@@ -351,6 +391,47 @@ export class Player {
 
             sprites.draw(ctx, 'stand_0', this.x, currentHeadY, w, h);
 
+            ctx.restore();
+            ctx.restore();
+            return;
+        }
+
+        if (this.state === 'VICTORY_JOY') {
+            const h = this.normalHeight;
+            const w = 76; // Preserves stand_0 proportion
+            const hopPeriod = 22;
+            const hopIndex = Math.floor(this.joyHopTimer / hopPeriod);
+            const hopPhase = (this.joyHopTimer % hopPeriod) / hopPeriod;
+
+            // Turn JoJo: faces right on even hops, flips left on odd hops
+            const faceRight = (hopIndex % 2 === 0);
+
+            // Squash & stretch: cushion upon landing, slight stretch in air
+            let scaleX = 1.0;
+            let scaleY = 1.0;
+            if (hopPhase < 0.12 || hopPhase > 0.88) {
+                scaleX = 1.08;
+                scaleY = 0.92;
+            } else if (hopPhase > 0.35 && hopPhase < 0.65) {
+                scaleX = 0.94;
+                scaleY = 1.06;
+            }
+
+            const drawW = w * scaleX;
+            const drawH = h * scaleY;
+            const drawX = this.x - (drawW - w) / 2;
+            const drawY = this.y - drawH;
+
+            ctx.save();
+            if (!faceRight) {
+                const centerX = drawX + drawW / 2;
+                ctx.translate(centerX, 0);
+                ctx.scale(-1, 1);
+                ctx.translate(-centerX, 0);
+            }
+
+            sprites.draw(ctx, 'stand_0', drawX, drawY, drawW, drawH);
+            ctx.restore();
             ctx.restore();
             return;
         }
