@@ -568,78 +568,69 @@ class FatCat {
     }
 }
 
-// Mangy Cat (Tuxedo) - Shifts maniacally between standing poses, rocks back & forth, and leaps in a high parabolic arc toward JoJo every 2-4 seconds
+// Mangy Cat (Tuxedo) - Appears and immediately jumps forward, wiggles, makes a calculated pounce toward JoJo, and (if time and luck allow) jumps backward a 3rd time with very little rest
 class MangyCat {
-    constructor(x, y, onBench = false, benchRef = null) {
+    constructor(x, y, onBench = false, benchRef = null, difficulty = 'medium') {
         this.type = 'cat';
         this.breed = 'mangy';
         this.x = x;
         this.y = y; // base foot Y
         this.baseGroundY = 438;
-        // Scaled up by 20% (previously 82x95 -> now 98x114)
+        this.difficulty = difficulty;
         this.width = 98;
         this.height = 114;
         this.onBench = onBench;
         this.benchRef = benchRef;
 
-        // Dynamics & States:
-        // 'SHIFT' -> maniacally switching between standing poses 1 and 2
-        // 'ROCK'  -> tense rocking back & forth in pounce-ready pose
-        // 'LEAP'  -> high parabolic arc into the air toward JoJo
-        // 'LAND'  -> crouching impact landing
-        this.state = 'SHIFT';
-        this.standPose = 1; // alternates between 1 and 2
+        // Choreography & States:
+        // 'SPAWN_PREP' -> immediately appears and prepares to jump forward (6-10 ticks)
+        // 'LEAP'       -> airborne in high arc
+        // 'LAND'       -> landing impact recovery (with dust puff)
+        // 'WIGGLE'     -> tense nervous rocking/wiggling before calculated pounce
+        // 'SHIFT'      -> idle stance
+        this.state = onBench ? 'SHIFT' : 'SPAWN_PREP';
+        this.standPose = 1;
         this.shiftTimer = 0;
-        this.rockPhase = 0;
         this.landTimer = 0;
-        this.facing = 'left'; // default sprite is right-facing, so facing left requires horizontal flip
+        this.spawnPrepTimer = 6 + Math.floor(Math.random() * 5); // Immediate jump forward!
+        this.wiggleTimer = 0;
+        this.wigglePhase = 0;
+        this.jumpStep = 0; // 1: jump forward, 2: calculated pounce, 3: jump backward
+        this.facing = 'left';
 
         // Leap physics
         this.vx = 0;
         this.vy = 0;
         this.gravity = 0.42;
 
-        // First jump triggered soon after spawning (40-60 ticks) so player witnesses the sequence
-        this.jumpCooldown = 45 + Math.floor(Math.random() * 25);
+        this.jumpCooldown = onBench ? 45 : 10;
     }
 
     update(scrollSpeed, playerX, playerY, particles = null) {
-        // Face toward JoJo (default sprite faces right, so when JoJo is to the left, facing is 'left')
-        this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
+        if (this.state !== 'LEAP') {
+            this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
+        }
 
-        // If perched on a bench and not in the air leaping, anchor to the bench seat
+        // If perched on a bench and not leaping, anchor to the bench seat
         if (this.onBench && this.benchRef && this.state !== 'LEAP') {
             this.x = this.benchRef.x + (this.benchRef.width - this.width) / 2;
             this.y = this.benchRef.y + this.benchRef.seatOffset;
+            this.jumpCooldown--;
+            if (this.jumpCooldown <= 0) {
+                this.startFirstJump();
+            }
         } else if (this.state !== 'LEAP') {
             this.x -= scrollSpeed;
         }
 
         // State Machine
-        if (this.state === 'SHIFT') {
-            this.jumpCooldown--;
-
-            // Maniacal shifting between stand_1 and stand_2 every 8 ticks
-            this.shiftTimer++;
-            if (this.shiftTimer >= 8) {
-                this.shiftTimer = 0;
-                this.standPose = this.standPose === 1 ? 2 : 1;
-            }
-
-            // Begin tense rocking when 35 ticks remain before launch
-            if (this.jumpCooldown <= 35) {
-                this.state = 'ROCK';
-                this.rockPhase = 0;
-            }
-        } else if (this.state === 'ROCK') {
-            this.jumpCooldown--;
-            this.rockPhase += 0.32; // Rapid nervous rocking back and forth
-
-            if (this.jumpCooldown <= 0) {
-                this.startLeap(playerX, scrollSpeed);
+        if (this.state === 'SPAWN_PREP') {
+            this.spawnPrepTimer--;
+            this.facing = 'left';
+            if (this.spawnPrepTimer <= 0) {
+                this.startFirstJump();
             }
         } else if (this.state === 'LEAP') {
-            // High arc airborne physics
             this.x += this.vx - scrollSpeed;
             this.vy += this.gravity;
             this.y += this.vy;
@@ -652,7 +643,6 @@ class MangyCat {
                 this.onBench = false;
                 this.benchRef = null;
                 this.state = 'LAND';
-                this.landTimer = 14;
 
                 // Dust particle impact on landing
                 if (particles) {
@@ -669,36 +659,105 @@ class MangyCat {
                         });
                     }
                 }
+
+                // Landing recovery time: very little rest after Jump 2!
+                if (this.jumpStep === 1) {
+                    this.landTimer = 10;
+                } else if (this.jumpStep === 2) {
+                    this.landTimer = 8; // Very little rest time!
+                } else {
+                    this.landTimer = 14;
+                }
             }
         } else if (this.state === 'LAND') {
             this.landTimer--;
             if (this.landTimer <= 0) {
-                this.state = 'SHIFT';
-                // Reset jump interval to 2-4 seconds (120-240 ticks at 60Hz)
-                this.jumpCooldown = 120 + Math.floor(Math.random() * 120);
-                this.standPose = 1;
+                if (this.jumpStep === 1) {
+                    // Jump 1 complete: enter wiggle before calculated pounce
+                    this.state = 'WIGGLE';
+                    this.wiggleTimer = 26 + Math.floor(Math.random() * 8); // Tense wiggle
+                    this.wigglePhase = 0;
+                } else if (this.jumpStep === 2) {
+                    // Jump 2 complete: jump backward a third time if time and luck allow
+                    let luckChance = 0.35;
+                    if (this.difficulty === 'medium') luckChance = 0.65;
+                    else if (this.difficulty === 'hard' || this.difficulty === 'endless') luckChance = 0.85;
+
+                    const timeAllows = (this.x > -60 && this.x < 960);
+                    const luckAllows = (Math.random() < luckChance);
+
+                    if (timeAllows && luckAllows) {
+                        this.startBackwardJump(scrollSpeed, playerX);
+                    } else {
+                        this.state = 'SHIFT';
+                        this.jumpCooldown = 180;
+                    }
+                } else {
+                    this.state = 'SHIFT';
+                    this.jumpCooldown = 180;
+                }
+            }
+        } else if (this.state === 'WIGGLE') {
+            this.wiggleTimer--;
+            this.wigglePhase += 0.45; // Rapid nervous wiggle
+            this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
+
+            if (this.wiggleTimer <= 0) {
+                this.startCalculatedPounce(scrollSpeed, playerX);
+            }
+        } else if (this.state === 'SHIFT') {
+            this.shiftTimer++;
+            if (this.shiftTimer >= 10) {
                 this.shiftTimer = 0;
+                this.standPose = this.standPose === 1 ? 2 : 1;
             }
         }
     }
 
-    startLeap(playerX, scrollSpeed) {
+    startFirstJump() {
+        this.jumpStep = 1;
         this.state = 'LEAP';
         sounds.playCatSwipe();
-
-        // Detach from bench so it lands on ground trail
         this.onBench = false;
         this.benchRef = null;
 
-        // High parabolic arc: -12.5 reaches ~160px above ground (approx y=278 apex)
-        this.vy = -12.5;
+        // Immediately jump forward into the screen toward JoJo
+        this.vy = -11.5;
+        this.vx = -4.5;
+        this.facing = 'left';
+    }
 
-        // Calculate horizontal trajectory toward JoJo
-        const distToPlayer = (playerX + 35) - (this.x + this.width / 2);
-        const airTime = (Math.abs(this.vy) / this.gravity) * 2; // ~60 ticks total airtime
-        const targetVx = distToPlayer / airTime;
-        // Menacing forward jump velocity
-        this.vx = Math.min(-1.8, Math.max(-6.5, targetVx));
+    startCalculatedPounce(scrollSpeed, playerX) {
+        this.jumpStep = 2;
+        this.state = 'LEAP';
+        sounds.playCatSwipe();
+        this.onBench = false;
+        this.benchRef = null;
+
+        // High calculated pounce arc
+        this.vy = -12.5;
+        const airTime = (Math.abs(this.vy) / this.gravity) * 2; // ~60 ticks
+
+        // Pounce directly at JoJo's position
+        const targetX = playerX + 25;
+        const requiredVx = scrollSpeed + (targetX - this.x) / airTime;
+
+        this.vx = Math.min(-1.5, Math.max(-8.5, requiredVx));
+        this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
+    }
+
+    startBackwardJump(scrollSpeed, playerX) {
+        this.jumpStep = 3;
+        this.state = 'LEAP';
+        sounds.playCatSwipe();
+        this.onBench = false;
+        this.benchRef = null;
+
+        // Jump backward a third time with very little rest time
+        this.vy = -11.5;
+        // Vaults backward to the right overcoming scroll speed
+        this.vx = scrollSpeed + 4.5;
+        this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
     }
 
     getHitbox() {
@@ -711,7 +770,7 @@ class MangyCat {
             w = this.width * 0.85;
             h = this.height * 0.8;
             y = this.y - h;
-        } else if (this.state === 'ROCK' || this.state === 'LAND') {
+        } else if (this.state === 'WIGGLE' || this.state === 'LAND' || this.state === 'SPAWN_PREP') {
             h = this.height * 0.65;
             y = this.y - h;
         }
@@ -729,24 +788,24 @@ class MangyCat {
         if (this.state === 'SHIFT') {
             key = this.standPose === 1 ? 'cat_mangy_stand_1' : 'cat_mangy_stand_2';
             if (this.onBench) {
-                // If on bench seat, uses crouch or alert stand
                 key = this.standPose === 1 ? 'cat_mangy_crouch' : 'cat_mangy_stand_1';
             }
-        } else if (this.state === 'ROCK') {
+        } else if (this.state === 'SPAWN_PREP') {
+            key = 'cat_mangy_stand_2';
+        } else if (this.state === 'WIGGLE') {
             key = 'cat_mangy_pounce_ready';
-            // Menacing back and forth rocking motion
-            const rockOffset = Math.sin(this.rockPhase) * 6;
-            drawX += rockOffset;
+            // Menacing rapid nervous wiggle
+            const wiggleOffset = Math.sin(this.wigglePhase) * 7;
+            drawX += wiggleOffset;
         } else if (this.state === 'LEAP') {
-            // Trajectory-aware leap poses
             if (this.vy < -3) {
-                key = 'cat_mangy_leap_1'; // High launch
+                key = 'cat_mangy_leap_1';
                 w += 24;
             } else if (this.vy >= -3 && this.vy <= 3) {
-                key = 'cat_mangy_leap_2'; // Apex spread-eagle
+                key = 'cat_mangy_leap_2';
                 w += 28;
             } else {
-                key = 'cat_mangy_leap_3'; // Downward dive
+                key = 'cat_mangy_leap_3';
                 w += 24;
             }
         } else if (this.state === 'LAND') {
@@ -756,7 +815,6 @@ class MangyCat {
             drawY = this.y - h;
         }
 
-        // Default sprite faces right, so mirror horizontally when facing JoJo to the left
         const isFlipped = (this.facing === 'left');
         sprites.draw(ctx, key, drawX, drawY, w, h, isFlipped);
     }
@@ -823,6 +881,8 @@ class Squirrel {
         this.stage = 'hidden';
         this.timer = 0;
         this.hasThrown = false;
+        // Squirrels appear even earlier with randomized popup distance (720 - 920px)
+        this.triggerDist = 720 + Math.floor(Math.random() * 200);
         this.hasSecondAcorn = Math.random() < 0.30; // 30% chance of follow-up throw after passing
         this.hasThrownSecond = false;
         this.facing = 'left'; // 'left' when JoJo is ahead, 'right' when JoJo passes
@@ -832,8 +892,8 @@ class Squirrel {
         this.x -= scrollSpeed;
         const distToPlayer = this.x - playerX;
 
-        // Stage A: First Acorn Throw (from ahead in an arc)
-        if (this.stage === 'hidden' && !this.hasThrown && distToPlayer < 540) {
+        // Stage A: First Acorn Throw (appears even earlier, dramatic high vertical arc)
+        if (this.stage === 'hidden' && !this.hasThrown && distToPlayer < this.triggerDist) {
             this.stage = 'popup';
             this.timer = 18;
             this.facing = 'left';
@@ -851,12 +911,27 @@ class Squirrel {
                 if (!this.hasThrown) {
                     this.hasThrown = true;
                     sounds.playAcornThrow();
-                    // Lob acorn with an upward arc toward JoJo
+                    // Lob acorn with high vertical arc directly into JoJo's path
                     const acornX = this.x - 10;
                     const acornY = this.y - 85;
-                    const acornVx = -3.8;
-                    const acornVy = -4.8;
-                    acornList.push(new Acorn(acornX, acornY, acornVx, acornVy, 0.20));
+                    const acornVy = -7.8; // High dramatic vertical arc
+                    const acornGravity = 0.22;
+
+                    // Calculate flight airtime to reach player ground level
+                    const targetGroundY = 438;
+                    const riseTime = Math.abs(acornVy) / acornGravity; // ~35.5 ticks
+                    const apexY = acornY - (acornVy * acornVy) / (2 * acornGravity);
+                    const fallDistance = targetGroundY - apexY;
+                    const fallTime = Math.sqrt((2 * fallDistance) / acornGravity); // ~47 ticks
+                    const totalAirTime = riseTime + fallTime; // ~82.5 ticks
+
+                    // Aim trajectory lands directly in JoJo's path
+                    const targetX = playerX + 15 + Math.random() * 25;
+                    const netSpeed = (targetX - acornX) / totalAirTime;
+                    const clampedNetSpeed = Math.min(-1.5, Math.max(-8.0, netSpeed));
+                    const acornVx = scrollSpeed + clampedNetSpeed;
+
+                    acornList.push(new Acorn(acornX, acornY, acornVx, acornVy, acornGravity));
                 }
             }
         } else if (this.stage === 'throw') {
@@ -904,12 +979,12 @@ class Squirrel {
                 if (!this.hasThrownSecond) {
                     this.hasThrownSecond = true;
                     sounds.playAcornThrow();
-                    // Lob follow-up acorn forward in an arc chasing JoJo
+                    // Lob follow-up acorn with high arc chasing JoJo
                     const acornX = this.x + this.width + 5;
                     const acornY = this.y - 85;
                     const acornVx = scrollSpeed + 5.2; // Overcome scroll speed to travel right
-                    const acornVy = -4.8;
-                    acornList.push(new Acorn(acornX, acornY, acornVx, acornVy, 0.20));
+                    const acornVy = -7.0; // High arc
+                    acornList.push(new Acorn(acornX, acornY, acornVx, acornVy, 0.22));
                 }
             }
         } else if (this.stage === 'throw_second') {
@@ -1046,6 +1121,8 @@ class Player {
 
         // Stats
         this.baconCount = 0;
+        this.settleDelayTimer = 0;
+        this.isCrawlingUnderBench = false;
     }
 
     reset() {
@@ -1064,6 +1141,12 @@ class Player {
         this.state = 'WALK';
         this.targetX = this.canvas.width * this.baseXRatio;
         this.x = this.targetX;
+        this.baconCount = 0;
+        this.settleDelayTimer = 0;
+        this.isCrawlingUnderBench = false;
+        this.animTimer = 0;
+        this.walkFrame = 0;
+        this.crawlFrame = 0;
     }
 
     jump() {
@@ -1126,21 +1209,31 @@ class Player {
             this.invulnerableTimer--;
         }
 
-        // Horizontal target calculation (expanded maneuverability for tactics & strategy)
+        // Horizontal target calculation (expanded maneuverability with slow equilibrium drift)
         const minX = this.canvas.width * 0.08;   // ~80px: hang back near left screen
         const normalX = this.canvas.width * this.baseXRatio; // ~200px: resting position
         const maxX = this.canvas.width * 0.58;     // ~580px: surge forward past mid-screen
 
-        let lerpFactor = 0.035; // Gentle return to baseline when idle
+        let lerpFactor = 0.006; // Very slow, gentle drift toward baseline when idle
 
         if (keys['ArrowRight']) {
             this.targetX = maxX;
-            lerpFactor = 0.09; // Snappy forward surge
+            lerpFactor = 0.045; // Halved forward dash speed (previously 0.09)
+            this.settleDelayTimer = 45; // Delay settling after releasing
         } else if (keys['ArrowLeft']) {
             this.targetX = minX;
-            lerpFactor = 0.09; // Snappy brake / retreat
+            lerpFactor = 0.08; // Responsive brake / retreat
+            this.settleDelayTimer = 45;
         } else {
-            this.targetX = normalX;
+            // Player hangs out in place for a while before very slowly settling back
+            if (this.settleDelayTimer > 0) {
+                this.settleDelayTimer--;
+                this.targetX = this.x;
+                lerpFactor = 0;
+            } else {
+                this.targetX = normalX;
+                lerpFactor = 0.006; // Much slower settling toward baseline
+            }
         }
 
         // Belly crawl reduces forward movement speed slightly
@@ -1148,14 +1241,20 @@ class Player {
             this.targetX = Math.min(this.targetX, normalX * 0.9);
         }
 
+        const prevX = this.x;
+
         // Smooth horizontal lerp
-        this.x += (this.targetX - this.x) * lerpFactor;
+        if (lerpFactor > 0) {
+            this.x += (this.targetX - this.x) * lerpFactor;
+        }
 
         // Handle Crawl & Bench collision
+        // Requirement: Down Arrow is needed to begin going under the bench, but no need to hold it.
+        // JoJo stays crouched until coming out the other side. Only failing to crouch when beginning matters.
         const wantCrawl = !!keys['ArrowDown'];
 
         let onBenchThisFrame = false;
-        let underBench = false;
+        let isUnderAnyBench = false;
         const footY = this.y;
 
         for (const obs of obstacles) {
@@ -1168,11 +1267,6 @@ class Player {
                 const playerLeft = this.x + 15;
                 const playerRight = this.x + this.normalWidth - 15;
 
-                // Check if JoJo is currently underneath the bench clearance
-                if (playerRight >= benchLeft + 10 && playerLeft <= benchRight - 10 && footY >= this.groundY - 10 && !this.currentPlatform) {
-                    underBench = true;
-                }
-
                 // Landing on bench seat from above
                 if (playerRight >= benchLeft + 15 && playerLeft <= benchRight - 15) {
                     if (this.vy >= 0 && Math.abs(footY - benchTopY) < 22) {
@@ -1181,6 +1275,7 @@ class Player {
                         this.isGrounded = true;
                         this.currentPlatform = obs;
                         onBenchThisFrame = true;
+                        this.isCrawlingUnderBench = false;
                     }
                 }
 
@@ -1190,14 +1285,47 @@ class Player {
                     this.isGrounded = false;
                 }
 
-                // Bumping into bench front while walking normally (not crawling under, not on top)
-                if (!this.currentPlatform && !wantCrawl && !underBench && this.isGrounded) {
-                    if (playerRight >= benchLeft && playerLeft < benchLeft + 25 && footY > benchTopY + 15) {
-                        // Prevent walking forward through solid bench frame
-                        this.x = benchLeft - this.normalWidth + 15;
+                // Ground interaction with bench
+                if (!this.currentPlatform && this.isGrounded) {
+                    // Check if player footprint overlaps horizontally with bench
+                    if (playerRight >= benchLeft && playerLeft <= benchRight) {
+                        // If player is already crawling or taps Down Arrow to duck under
+                        if (wantCrawl || this.isCrawlingUnderBench) {
+                            this.isCrawlingUnderBench = true;
+                            isUnderAnyBench = true;
+                        } else {
+                            // Failed to crouch while trying to go under the bench:
+                            // Resolve collision based on which side JoJo is on or approached from:
+                            const prevLeft = prevX + 15;
+                            const prevRight = prevX + this.normalWidth - 15;
+                            const playerMidX = (playerLeft + playerRight) / 2;
+                            const benchMidX = (benchLeft + benchRight) / 2;
+
+                            // If JoJo approached from the right (moving backwards) OR is on the right half of the bench:
+                            if (prevLeft >= benchRight - 20 || playerMidX > benchMidX) {
+                                // Blocked at the bench's right edge so JoJo doesn't walk backwards through it
+                                this.x = benchRight - 15;
+                            } else {
+                                // Moving forward into bench from the left (or caught at front):
+                                // Blocked and pushed back by the solid front frame of the bench
+                                this.x = benchLeft - this.normalWidth + 15;
+                            }
+                        }
                     }
                 }
             }
+        }
+
+        // If no longer under any bench, release the under-bench crouch lock
+        if (!isUnderAnyBench && this.isCrawlingUnderBench) {
+            this.isCrawlingUnderBench = false;
+        }
+
+        // Fail condition: JoJo pushed off the screen to the far left
+        if (this.x + this.normalWidth < 0 || this.x < -30) {
+            this.hearts = 0;
+            this.isDead = true;
+            sounds.playHurt();
         }
 
         if (!onBenchThisFrame && this.currentPlatform) {
@@ -1225,17 +1353,21 @@ class Player {
             }
         }
 
-        // Determine current state (forced crawl if under bench)
+        // Determine current state:
+        // JoJo stays crouched if player holds Down Arrow OR if currently passing under a bench
+        const shouldCrawl = (wantCrawl || this.isCrawlingUnderBench);
+
         if (!this.isGrounded) {
             this.state = 'JUMP';
-        } else if (wantCrawl || underBench) {
+        } else if (shouldCrawl) {
             this.state = 'CRAWL';
         } else {
             this.state = 'WALK';
         }
 
-        // Update animation frames (smooth ~10-12 fps cycle tuned for 8-frame loop)
-        this.animTimer += 0.035 * gameSpeed;
+        // Update animation frames (faster walk animation: ~0.065 to match steps to scroll speed)
+        const cycleRate = (this.state === 'WALK' ? 0.065 : 0.040);
+        this.animTimer += cycleRate * gameSpeed;
         if (this.animTimer >= 1.0) {
             this.animTimer = 0;
             this.walkFrame = (this.walkFrame + 1) % 8;
@@ -1405,6 +1537,13 @@ class World {
         if (this.farMountainOffset > 4000) this.farMountainOffset %= 4000;
         if (this.midBgOffset > 5000) this.midBgOffset %= 5000;
         if (this.foreOffset > 10000) this.foreOffset %= 10000;
+    }
+
+    reset() {
+        this.cloudOffset = 0;
+        this.farMountainOffset = 0;
+        this.midBgOffset = 0;
+        this.foreOffset = 0;
     }
 
     draw(ctx) {
@@ -1615,13 +1754,62 @@ class Game {
         this.victoryBannerX = -999;
         this.showVictoryModal = false;
 
+        // Interactive Controls Card Cycling
+        this.controlCycleTimer = null;
+        this.controlCycleIndex = 0;
+        this.controlCycleKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'];
+        this.controlKeyData = {
+            'ArrowUp': { title: 'JUMP', desc: 'Leap over cats, pit holes & benches' },
+            'ArrowDown': { title: 'CROUCH / CRAWL', desc: 'Belly crawl under benches & flying nuts' },
+            'ArrowLeft': { title: 'MOVE LEFT', desc: 'Slight brake & ease back' },
+            'ArrowRight': { title: 'MOVE RIGHT', desc: 'Surge forward along the trail' },
+            'Space': { title: 'JUMP', desc: 'High leap into the air (Spacebar or Up)' }
+        };
+
+        // In-Card Enemy Cycler
+        this.currentEnemyIndex = 0;
+        this.enemyCatalog = [
+            {
+                name: 'FAT CAT (TABBY)',
+                sprite: 'assets/cat/fat/cat_sit.png',
+                desc: 'Lounges lazily on the trail or benches. Swipes a lightning-fast claw when JoJo gets close!',
+                tip: 'Leap over him, or belly crawl beneath if perched on a bench.'
+            },
+            {
+                name: 'MANGY CAT (TUXEDO)',
+                sprite: 'assets/sprites/cat/mangy/cat_stand_1.png',
+                desc: 'Twitches nervously, rocks back and forth, then catapults in a high airborne leap right at you!',
+                tip: 'Surge forward under his flight arc, or wait and jump clean as he lands.'
+            },
+            {
+                name: 'BUSH BANDIT SQUIRREL',
+                sprite: 'assets/sprites/squirrel/sq_throw.png',
+                desc: 'Pops out of roadside brush to lob high-spinning acorns. Watch out for sneak rear throws!',
+                tip: 'Belly crawl right under high nuts, or time a leap over low throws.'
+            },
+            {
+                name: 'BENCHES & PIT HOLES',
+                sprite: 'assets/sprites/items/hole.png',
+                desc: 'Benches can be leaped onto or crawled under. Pit holes are bottomless traps (instant game over)!',
+                tip: 'Always keep enough forward speed to jump clear across holes.'
+            },
+            {
+                name: 'SIZZLING BACON 🥓',
+                sprite: 'assets/sprites/items/bacon.png',
+                desc: 'Delicious snack strips along the wilderness trail. Heals +1 Heart and awards +150 bonus score!',
+                tip: 'Collect every strip to stay at full health for tough obstacles ahead.'
+            }
+        ];
+
         this.loopStarted = false;
         this.animFrameId = null;
     }
 
     async init() {
         await sprites.loadAll();
-        this.updateHUD();
+        this.resetGame();
+        this.setupControlCycle();
+        this.renderCurrentEnemy();
         this.startLoop();
     }
 
@@ -1635,9 +1823,14 @@ class Game {
             this.keys[e.code] = true;
             sounds.init();
 
-            if (e.code === 'Space') {
+            if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
                 if (this.state === 'PLAYING') {
                     this.player.jump();
+                }
+            }
+            if (e.code === 'Escape') {
+                if (this.state === 'PLAYING' || this.state === 'PAUSED') {
+                    this.togglePause();
                 }
             }
             if (e.code === 'KeyP') {
@@ -1649,15 +1842,101 @@ class Game {
             if (e.code === 'KeyF') {
                 this.toggleFullscreen();
             }
+            if (e.code === 'Enter' || e.code === 'NumpadEnter') {
+                if (this.state === 'STAGE_CLEAR' || this.state === 'GAME_OVER') {
+                    this.returnToMenu();
+                }
+            }
         });
 
         window.addEventListener('keyup', (e) => {
             this.keys[e.code] = false;
         });
+
+        window.addEventListener('blur', () => {
+            this.keys = {};
+        });
     }
 
-    startGame(difficulty = 'medium') {
-        this.difficulty = difficulty;
+    setupControlCycle() {
+        const keys = document.querySelectorAll('.keycap-interactive');
+        keys.forEach(k => {
+            k.addEventListener('mouseenter', () => {
+                this.pauseControlCycle();
+                this.highlightControlKey(k.getAttribute('data-key'));
+            });
+            k.addEventListener('mouseleave', () => {
+                this.startControlCycle();
+            });
+        });
+
+        this.startControlCycle();
+    }
+
+    highlightControlKey(keyName) {
+        document.querySelectorAll('.keycap-interactive').forEach(el => {
+            if (el.getAttribute('data-key') === keyName) {
+                el.classList.add('active-key');
+            } else {
+                el.classList.remove('active-key');
+            }
+        });
+
+        const data = this.controlKeyData[keyName];
+        if (data) {
+            const titleEl = document.getElementById('feedbackTitle');
+            const descEl = document.getElementById('feedbackDesc');
+            if (titleEl) titleEl.textContent = data.title;
+            if (descEl) descEl.textContent = data.desc;
+        }
+    }
+
+    startControlCycle() {
+        if (this.controlCycleTimer) clearInterval(this.controlCycleTimer);
+        this.controlCycleTimer = setInterval(() => {
+            if (this.state !== 'MENU') return;
+            const keyName = this.controlCycleKeys[this.controlCycleIndex];
+            this.highlightControlKey(keyName);
+            this.controlCycleIndex = (this.controlCycleIndex + 1) % this.controlCycleKeys.length;
+        }, 1500);
+    }
+
+    pauseControlCycle() {
+        if (this.controlCycleTimer) {
+            clearInterval(this.controlCycleTimer);
+            this.controlCycleTimer = null;
+        }
+    }
+
+    cycleEnemy(direction) {
+        this.currentEnemyIndex = (this.currentEnemyIndex + direction + this.enemyCatalog.length) % this.enemyCatalog.length;
+        this.renderCurrentEnemy();
+    }
+
+    renderCurrentEnemy() {
+        const item = this.enemyCatalog[this.currentEnemyIndex];
+        if (!item) return;
+
+        const countEl = document.getElementById('enemyCountBadge');
+        if (countEl) countEl.textContent = `${this.currentEnemyIndex + 1} / ${this.enemyCatalog.length}`;
+
+        const nameEl = document.getElementById('enemyName');
+        if (nameEl) nameEl.textContent = item.name;
+
+        const imgEl = document.getElementById('enemySpriteImg');
+        if (imgEl) {
+            imgEl.src = item.sprite;
+            imgEl.alt = item.name;
+        }
+
+        const descEl = document.getElementById('enemyDesc');
+        if (descEl) descEl.textContent = item.desc;
+
+        const tipEl = document.getElementById('enemyTip');
+        if (tipEl) tipEl.innerHTML = `<strong>Survival Tip:</strong> ${item.tip}`;
+    }
+
+    resetGame() {
         this.distance = 0;
         this.score = 0;
         this.obstacles = [];
@@ -1666,16 +1945,33 @@ class Game {
         this.particles = [];
         this.victoryBannerX = -999;
         this.showVictoryModal = false;
+        this.keys = {}; // Clear any stuck input keys
+        this.spawnTimer = 80;
 
-        const config = this.diffConfigs[this.difficulty];
+        const config = this.diffConfigs[this.difficulty] || this.diffConfigs['medium'];
+        this.currentSpeed = config.baseSpeed;
+
+        // Fresh instances guarantee 100% clean initial state with zero stale properties
+        this.player = new Player(this.canvas);
+        this.world = new World(this.canvas);
+        this.updateHUD();
+    }
+
+    startGame(difficulty = 'medium') {
+        this.difficulty = difficulty;
+        this.keys = {}; // Clear inputs
+        this.resetGame();
+
+        const config = this.diffConfigs[this.difficulty] || this.diffConfigs['medium'];
         this.currentSpeed = config.baseSpeed;
         this.spawnTimer = Math.floor(config.spawnMin * 0.75);
 
-        this.player.reset();
+        this.resetLoopTiming();
         this.state = 'PLAYING';
 
         sounds.stopJingles();
         sounds.startMusic();
+        this.pauseControlCycle();
         this.hideAllOverlays();
         this.updateHUD();
     }
@@ -1715,9 +2011,11 @@ class Game {
         this.state = 'MENU';
         sounds.stopMusic();
         sounds.stopJingles();
+        this.resetGame();
         this.hideAllOverlays();
         const menu = document.getElementById('menuOverlay');
         if (menu) menu.classList.remove('hidden');
+        this.startControlCycle();
     }
 
     spawnObstaclePattern() {
@@ -1744,7 +2042,7 @@ class Game {
                 const catX = bench.x + (bench.width - 85) / 2;
                 const catY = bench.y + bench.seatOffset;
                 const cat = catBreed === 'mangy'
-                    ? new MangyCat(catX, catY, true, bench)
+                    ? new MangyCat(catX, catY, true, bench, this.difficulty)
                     : new FatCat(catX, catY, true, bench);
                 this.obstacles.push(cat);
                 bench.hasCat = true;
@@ -1769,7 +2067,7 @@ class Game {
             // Ground Cat (fat or mangy) walking along the path
             const catBreed = Math.random() < 0.5 ? 'fat' : 'mangy';
             const cat = catBreed === 'mangy'
-                ? new MangyCat(x, groundY, false, null)
+                ? new MangyCat(x, groundY, false, null, this.difficulty)
                 : new FatCat(x, groundY, false, null);
             this.obstacles.push(cat);
             if (Math.random() < 0.35) {
@@ -1835,7 +2133,7 @@ class Game {
 
         // Dynamic speed adjustment based on JoJo's surge / brake (expanded maneuverability)
         if (this.keys['ArrowRight']) {
-            scrollSpeed *= 1.20; // Agile speed surge
+            scrollSpeed *= 1.10; // Halved forward dash boost (previously 1.20)
         } else if (this.keys['ArrowLeft']) {
             scrollSpeed *= 0.82; // Controlled brake / hang back
         }
@@ -1983,17 +2281,26 @@ class Game {
         this.state = 'STAGE_CLEAR';
         sounds.stopMusic();
         sounds.playVictory();
+        this.keys = {}; // Reset all input keys
 
-        document.getElementById('victoryOverlay').classList.remove('hidden');
-        document.getElementById('vic-difficulty').textContent = this.difficulty.toUpperCase();
-        document.getElementById('vic-score').textContent = this.score;
-        document.getElementById('vic-bacon').textContent = this.player.baconCount;
+        const vicOverlay = document.getElementById('victoryOverlay');
+        if (vicOverlay) vicOverlay.classList.remove('hidden');
+
+        const diffEl = document.getElementById('vic-difficulty');
+        if (diffEl) diffEl.textContent = this.difficulty.toUpperCase();
+
+        const scoreEl = document.getElementById('vic-score');
+        if (scoreEl) scoreEl.textContent = this.score;
+
+        const baconEl = document.getElementById('vic-bacon');
+        if (baconEl && this.player) baconEl.textContent = this.player.baconCount;
     }
 
     gameOver() {
         this.state = 'GAME_OVER';
         sounds.stopMusic();
         sounds.playGameOver();
+        this.keys = {}; // Reset all input keys
 
         document.getElementById('gameoverOverlay').classList.remove('hidden');
     }
@@ -2069,8 +2376,8 @@ class Game {
             }
         }
 
-        // 6. Finish Line Banner (if near 1000m)
-        if (this.victoryBannerX > -500) {
+        // 6. Finish Line Signpost (only if playing/cleared near 1000m)
+        if (this.state !== 'MENU' && this.victoryBannerX > -500) {
             this.drawFinishGate(this.ctx, this.victoryBannerX);
         }
 
@@ -2086,61 +2393,12 @@ class Game {
     drawFinishGate(ctx, x) {
         const groundY = this.player.groundY;
 
-        // Rendered rustic Dog Park Signpost
+        // Rendered rustic Dog Park Signpost PNG (standalone end-of-trail marker)
         const signW = 180;
         const signH = 185;
-        const signX = x + 80;
+        const signX = x + 30;
         const signY = groundY - signH + 10;
         sprites.draw(ctx, 'signpost_dogpark', signX, signY, signW, signH);
-
-        // Rustic Trailhead Arch with wooden timber posts
-        const archLeftX = x - 40;
-        const archRightX = x + 270;
-        const archH = 230;
-        const archY = groundY - archH;
-
-        // Timber posts (rustic bark & woodgrain)
-        ctx.fillStyle = '#4a2f13';
-        ctx.fillRect(archLeftX, archY, 22, archH);
-        ctx.fillRect(archRightX, archY, 22, archH);
-
-        // Timber grain highlights
-        ctx.fillStyle = '#7a5126';
-        ctx.fillRect(archLeftX + 3, archY, 6, archH);
-        ctx.fillRect(archRightX + 3, archY, 6, archH);
-
-        // Top rustic wooden crossbeam
-        const beamX = archLeftX - 15;
-        const beamW = archRightX - archLeftX + 52;
-        ctx.fillStyle = '#5c3a19';
-        ctx.fillRect(beamX, archY + 10, beamW, 44);
-        ctx.fillStyle = '#3a230d';
-        ctx.fillRect(beamX, archY + 54, beamW, 4);
-        ctx.strokeStyle = '#2d1a08';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(beamX, archY + 10, beamW, 44);
-
-        // Trailhead lettering
-        ctx.fillStyle = '#fef08a';
-        ctx.font = 'bold 14px "Press Start 2P", monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('DOG PARK TRAILHEAD', beamX + beamW / 2, archY + 38);
-
-        // Festooned trail pennants hanging under crossbeam
-        const flagColors = ['#f43f5e', '#38bdf8', '#fbbf24', '#34d399', '#f43f5e', '#a855f7'];
-        const flagCount = 8;
-        const flagStep = (beamW - 20) / flagCount;
-        for (let f = 0; f < flagCount; f++) {
-            const fx = beamX + 10 + f * flagStep;
-            const fy = archY + 56;
-            ctx.fillStyle = flagColors[f % flagColors.length];
-            ctx.beginPath();
-            ctx.moveTo(fx, fy);
-            ctx.lineTo(fx + flagStep * 0.8, fy);
-            ctx.lineTo(fx + flagStep * 0.4, fy + 16);
-            ctx.closePath();
-            ctx.fill();
-        }
     }
 
     toggleFullscreen() {
@@ -2158,23 +2416,29 @@ class Game {
         }
     }
 
+    resetLoopTiming() {
+        this.lastLoopTime = performance.now();
+        this.loopAccumulator = 0;
+    }
+
     startLoop() {
         if (this.loopStarted) return;
         this.loopStarted = true;
 
-        let lastTime = performance.now();
-        let accumulator = 0;
+        this.lastLoopTime = performance.now();
+        this.loopAccumulator = 0;
         const FIXED_STEP = 1000 / 60; // Exact 60 ticks/second (16.6667 ms)
         const MAX_FRAME_TIME = 100; // Guard against huge delta leaps when tab is backgrounded
 
         const loop = (currentTime) => {
-            const frameTime = Math.min(currentTime - lastTime, MAX_FRAME_TIME);
-            lastTime = currentTime;
-            accumulator += frameTime;
+            if (!this.lastLoopTime) this.lastLoopTime = currentTime;
+            const frameTime = Math.min(currentTime - this.lastLoopTime, MAX_FRAME_TIME);
+            this.lastLoopTime = currentTime;
+            this.loopAccumulator = (this.loopAccumulator || 0) + frameTime;
 
-            while (accumulator >= FIXED_STEP) {
+            while (this.loopAccumulator >= FIXED_STEP) {
                 this.update();
-                accumulator -= FIXED_STEP;
+                this.loopAccumulator -= FIXED_STEP;
             }
 
             this.draw();

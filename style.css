@@ -152,15 +152,16 @@ canvas#gameCanvas {
 .overlay {
     position: absolute;
     inset: 0;
-    background: rgba(15, 23, 42, 0.88);
-    backdrop-filter: blur(4px);
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(6px);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     z-index: 10;
-    padding: 20px;
+    padding: 16px 20px;
     text-align: center;
+    overflow-y: auto;
     transition: opacity 0.2s ease;
 }
 
@@ -168,87 +169,448 @@ canvas#gameCanvas {
     display: none;
 }
 
+/* Custom scrollbars for overlays */
+.overlay::-webkit-scrollbar,
+.guide-cards-container::-webkit-scrollbar {
+    width: 6px;
+}
+.overlay::-webkit-scrollbar-track,
+.guide-cards-container::-webkit-scrollbar-track {
+    background: #0f172a;
+}
+.overlay::-webkit-scrollbar-thumb,
+.guide-cards-container::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 3px;
+}
+
+/* Main Menu Content Container - Expanded Real Estate */
+.menu-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 98%;
+    max-width: 990px;
+    margin: auto 0;
+}
+
 .title-banner {
     font-family: 'Press Start 2P', monospace;
-    font-size: 32px;
+    font-size: clamp(26px, 3.8vw, 40px);
     color: #fef08a;
     text-shadow: 4px 4px 0 #ca8a04, 6px 6px 0 #000000;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+    letter-spacing: 1.5px;
 }
 
 .subtitle {
-    font-size: 16px;
+    font-size: clamp(14px, 1.6vw, 18px);
     color: #93c5fd;
     font-weight: 600;
-    margin-bottom: 24px;
-    letter-spacing: 1px;
+    margin-bottom: 14px;
+    letter-spacing: 0.5px;
 }
 
-.difficulty-select {
+/* 3 Large Horizontal Intro Cards Row */
+.intro-cards-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    width: 100%;
+    margin-bottom: 18px;
+    align-items: stretch;
+}
+
+.intro-card {
+    background: #0f172a;
+    border: 2px solid #334155;
+    border-radius: 14px;
+    padding: 18px 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     display: flex;
-    gap: 12px;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    min-height: 250px;
+    box-sizing: border-box;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #1e293b;
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+}
+
+.card-tag {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px;
+    color: #38bdf8;
+    letter-spacing: 0.5px;
+}
+
+/* Card 1: Keyboard Cluster & Interactive Highlight */
+.keyboard-visual {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-grow: 1;
     justify-content: center;
 }
 
-.diff-btn {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 11px;
-    padding: 12px 18px;
-    border: 3px solid;
-    border-radius: 10px;
-    background: #1e293b;
-    cursor: pointer;
-    color: #ffffff;
-    transition: transform 0.15s, filter 0.15s;
+.arrow-cluster {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
 }
 
-.diff-btn:hover {
-    transform: translateY(-2px);
-    filter: brightness(1.2);
+.arrow-row-up {
+    display: flex;
+    justify-content: center;
+}
+
+.arrow-row-bottom {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+}
+
+.spacebar-row {
+    display: flex;
+    justify-content: center;
+    margin-top: 4px;
+    width: 100%;
+}
+
+.keycap {
+    background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
+    border: 2px solid #64748b;
+    border-bottom: 5px solid #475569;
+    color: #f8fafc;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 16px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.45);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: 0.5px;
+    user-select: none;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.15s, box-shadow 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.keycap-space {
+    width: 90%;
+    padding: 11px 16px;
+    font-size: 13px;
+}
+
+.keycap-mini {
+    font-size: 13px;
+    padding: 6px 12px;
+    border-bottom-width: 4px;
+    min-width: 48px;
+    border-radius: 6px;
+}
+
+.keycap-interactive:hover,
+.keycap-interactive.active-key {
+    background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+    border-color: #7dd3fc;
+    border-bottom-color: #0369a1;
+    color: #0f172a;
+    transform: translateY(2px);
+    box-shadow: 0 0 18px rgba(56, 189, 248, 0.75);
+}
+
+.control-feedback-box {
+    background: #09121f;
+    border: 2px solid #1e3a5f;
+    border-radius: 10px;
+    padding: 10px 12px;
+    min-height: 56px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+}
+
+.feedback-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 15px;
+    color: #fef08a;
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
+}
+
+.feedback-desc {
+    font-size: 13px;
+    color: #cbd5e1;
+    font-weight: 500;
+    line-height: 1.35;
+}
+
+/* Card 2: In-Card Enemy Cycler */
+.enemies-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.enemy-nav-arrows {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.enemy-nav-btn {
+    background: #1e293b;
+    border: 2px solid #475569;
+    color: #fef08a;
+    font-size: 13px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, transform 0.1s, border-color 0.15s;
+}
+
+.enemy-nav-btn:hover {
+    background: #ca8a04;
+    color: #ffffff;
+    border-color: #fef08a;
+    transform: scale(1.1);
+}
+
+.enemy-count-badge {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    color: #cbd5e1;
+}
+
+.enemy-display-body {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    justify-content: space-between;
+    text-align: left;
+}
+
+.enemy-preview-area {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 10px;
+}
+
+.enemy-icon-frame {
+    width: 72px;
+    min-width: 72px;
+    height: 72px;
+    background: #0b1320;
+    border: 2px solid #334155;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.enemy-card-pixel-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+.enemy-name {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 13px;
+    color: #fb923c;
+    line-height: 1.4;
+    letter-spacing: 0.5px;
+}
+
+.enemy-desc {
+    font-size: 13px;
+    color: #cbd5e1;
+    line-height: 1.45;
+    margin-bottom: 8px;
+}
+
+.enemy-tip-box {
+    font-size: 12px;
+    color: #6ee7b7;
+    background: rgba(16, 185, 129, 0.12);
+    border-left: 4px solid #10b981;
+    padding: 6px 10px;
+    border-radius: 0 6px 6px 0;
+    line-height: 1.4;
+}
+
+/* Card 3: Special Keys List */
+.special-keys-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex-grow: 1;
+    justify-content: space-around;
+}
+
+.special-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    text-align: left;
+}
+
+.special-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.special-action {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    color: #fef08a;
+    letter-spacing: 0.5px;
+}
+
+.special-hint {
+    font-size: 13px;
+    color: #cbd5e1;
+}
+
+/* Large Difficulty Selection Grid */
+.difficulty-select {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    width: 100%;
+}
+
+.diff-btn {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 18px 12px;
+    border: 3px solid;
+    border-radius: 14px;
+    background: #111a1e;
+    cursor: pointer;
+    color: #ffffff;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s, filter 0.2s;
+    min-height: 115px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.diff-btn-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.diff-icon {
+    font-size: 20px;
+}
+
+.diff-name {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+}
+
+.diff-goal {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.diff-desc {
+    font-size: 13px;
+    font-weight: 500;
+    color: #cbd5e1;
+    line-height: 1.35;
+}
+
+.diff-easy {
+    border-color: #22c55e;
+    background: linear-gradient(180deg, #14281b 0%, #0c1810 100%);
+}
+.diff-easy .diff-name { color: #4ade80; }
+.diff-easy .diff-goal { color: #86efac; border: 1px solid #22c55e44; }
+.diff-easy:hover {
+    border-color: #4ade80;
+    box-shadow: 0 10px 24px rgba(34, 197, 94, 0.35);
+    transform: translateY(-4px);
+}
+
+.diff-medium {
+    border-color: #eab308;
+    background: linear-gradient(180deg, #2b2410 0%, #181409 100%);
+}
+.diff-medium .diff-name { color: #facc15; }
+.diff-medium .diff-goal { color: #fde047; border: 1px solid #eab30844; }
+.diff-medium:hover {
+    border-color: #facc15;
+    box-shadow: 0 10px 24px rgba(234, 179, 8, 0.35);
+    transform: translateY(-4px);
+}
+
+.diff-hard {
+    border-color: #ef4444;
+    background: linear-gradient(180deg, #2c1214 0%, #18090a 100%);
+}
+.diff-hard .diff-name { color: #f87171; }
+.diff-hard .diff-goal { color: #fca5a5; border: 1px solid #ef444444; }
+.diff-hard:hover {
+    border-color: #f87171;
+    box-shadow: 0 10px 24px rgba(239, 68, 68, 0.35);
+    transform: translateY(-4px);
+}
+
+.diff-endless {
+    border-color: #a855f7;
+    background: linear-gradient(180deg, #221230 0%, #13091c 100%);
+}
+.diff-endless .diff-name { color: #c084fc; }
+.diff-endless .diff-goal { color: #e9d5ff; border: 1px solid #a855f744; }
+.diff-endless:hover {
+    border-color: #c084fc;
+    box-shadow: 0 10px 24px rgba(168, 85, 247, 0.35);
+    transform: translateY(-4px);
 }
 
 .diff-btn:active {
     transform: translateY(1px);
 }
 
-.diff-easy { border-color: #22c55e; }
-.diff-medium { border-color: #eab308; }
-.diff-hard { border-color: #ef4444; }
-.diff-endless { border-color: #8b5cf6; }
-
-.instructions-box {
-    background: #0f172a;
-    border: 2px solid #334155;
-    border-radius: 10px;
-    padding: 14px 20px;
-    max-width: 680px;
-    width: 100%;
-    font-size: 13px;
-    color: #cbd5e1;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px 16px;
-    text-align: left;
-    margin-bottom: 15px;
-}
-
-.inst-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.key-badge {
-    background: #334155;
-    border: 1px solid #64748b;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: monospace;
-    font-weight: bold;
-    color: #f8fafc;
-    font-size: 11px;
+@media (max-width: 820px) {
+    .intro-cards-row {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    .difficulty-select {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 .modal-card {
@@ -307,6 +669,68 @@ canvas#gameCanvas {
 
 .modal-btn.secondary:hover {
     background: #64748b;
+}
+
+/* Victory Screen Modal & Action Button */
+.victory-card {
+    border-color: #34d399;
+    box-shadow: 0 12px 40px rgba(16, 185, 129, 0.35);
+    max-width: 660px;
+    width: 92%;
+    padding: 24px 28px;
+}
+
+.victory-newspaper-img {
+    width: 100%;
+    max-width: 580px;
+    border-radius: 8px;
+    margin: 12px auto;
+    border: 3px solid #334155;
+    display: block;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+}
+
+.victory-subtitle {
+    color: #6ee7b7;
+    font-weight: bold;
+    margin: 10px 0 12px 0;
+    font-size: 16px;
+    line-height: 1.4;
+}
+
+.play-again-prompt {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 18px;
+    color: #fef08a;
+    text-shadow: 2px 2px 0 #000;
+    margin: 14px 0 6px 0;
+    letter-spacing: 1px;
+}
+
+.victory-action-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px;
+    padding: 18px 36px;
+    background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+    color: #ffffff;
+    border: 3px solid #6ee7b7;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.45);
+    transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+    line-height: 1.5;
+    letter-spacing: 0.5px;
+    margin-top: 8px;
+}
+
+.victory-action-btn:hover {
+    filter: brightness(1.2);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 10px 28px rgba(52, 211, 153, 0.55);
+}
+
+.victory-action-btn:active {
+    transform: translateY(1px);
 }
 
 /* Game Over Sad Poster & Controls */

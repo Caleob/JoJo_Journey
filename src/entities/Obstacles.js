@@ -162,78 +162,69 @@ export class FatCat {
     }
 }
 
-// Mangy Cat (Tuxedo) - Shifts maniacally between standing poses, rocks back & forth, and leaps in a high parabolic arc toward JoJo every 2-4 seconds
+// Mangy Cat (Tuxedo) - Appears and immediately jumps forward, wiggles, makes a calculated pounce toward JoJo, and (if time and luck allow) jumps backward a 3rd time with very little rest
 export class MangyCat {
-    constructor(x, y, onBench = false, benchRef = null) {
+    constructor(x, y, onBench = false, benchRef = null, difficulty = 'medium') {
         this.type = 'cat';
         this.breed = 'mangy';
         this.x = x;
         this.y = y; // base foot Y
         this.baseGroundY = 438;
-        // Scaled up by 20% (previously 82x95 -> now 98x114)
+        this.difficulty = difficulty;
         this.width = 98;
         this.height = 114;
         this.onBench = onBench;
         this.benchRef = benchRef;
 
-        // Dynamics & States:
-        // 'SHIFT' -> maniacally switching between standing poses 1 and 2
-        // 'ROCK'  -> tense rocking back & forth in pounce-ready pose
-        // 'LEAP'  -> high parabolic arc into the air toward JoJo
-        // 'LAND'  -> crouching impact landing
-        this.state = 'SHIFT';
-        this.standPose = 1; // alternates between 1 and 2
+        // Choreography & States:
+        // 'SPAWN_PREP' -> immediately appears and prepares to jump forward (6-10 ticks)
+        // 'LEAP'       -> airborne in high arc
+        // 'LAND'       -> landing impact recovery (with dust puff)
+        // 'WIGGLE'     -> tense nervous rocking/wiggling before calculated pounce
+        // 'SHIFT'      -> idle stance
+        this.state = onBench ? 'SHIFT' : 'SPAWN_PREP';
+        this.standPose = 1;
         this.shiftTimer = 0;
-        this.rockPhase = 0;
         this.landTimer = 0;
-        this.facing = 'left'; // default sprite is right-facing, so facing left requires horizontal flip
+        this.spawnPrepTimer = 6 + Math.floor(Math.random() * 5); // Immediate jump forward!
+        this.wiggleTimer = 0;
+        this.wigglePhase = 0;
+        this.jumpStep = 0; // 1: jump forward, 2: calculated pounce, 3: jump backward
+        this.facing = 'left';
 
         // Leap physics
         this.vx = 0;
         this.vy = 0;
         this.gravity = 0.42;
 
-        // First jump triggered soon after spawning (40-60 ticks) so player witnesses the sequence
-        this.jumpCooldown = 45 + Math.floor(Math.random() * 25);
+        this.jumpCooldown = onBench ? 45 : 10;
     }
 
     update(scrollSpeed, playerX, playerY, particles = null) {
-        // Face toward JoJo (default sprite faces right, so when JoJo is to the left, facing is 'left')
-        this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
+        if (this.state !== 'LEAP') {
+            this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
+        }
 
-        // If perched on a bench and not in the air leaping, anchor to the bench seat
+        // If perched on a bench and not leaping, anchor to the bench seat
         if (this.onBench && this.benchRef && this.state !== 'LEAP') {
             this.x = this.benchRef.x + (this.benchRef.width - this.width) / 2;
             this.y = this.benchRef.y + this.benchRef.seatOffset;
+            this.jumpCooldown--;
+            if (this.jumpCooldown <= 0) {
+                this.startFirstJump();
+            }
         } else if (this.state !== 'LEAP') {
             this.x -= scrollSpeed;
         }
 
         // State Machine
-        if (this.state === 'SHIFT') {
-            this.jumpCooldown--;
-
-            // Maniacal shifting between stand_1 and stand_2 every 8 ticks
-            this.shiftTimer++;
-            if (this.shiftTimer >= 8) {
-                this.shiftTimer = 0;
-                this.standPose = this.standPose === 1 ? 2 : 1;
-            }
-
-            // Begin tense rocking when 35 ticks remain before launch
-            if (this.jumpCooldown <= 35) {
-                this.state = 'ROCK';
-                this.rockPhase = 0;
-            }
-        } else if (this.state === 'ROCK') {
-            this.jumpCooldown--;
-            this.rockPhase += 0.32; // Rapid nervous rocking back and forth
-
-            if (this.jumpCooldown <= 0) {
-                this.startLeap(playerX, scrollSpeed);
+        if (this.state === 'SPAWN_PREP') {
+            this.spawnPrepTimer--;
+            this.facing = 'left';
+            if (this.spawnPrepTimer <= 0) {
+                this.startFirstJump();
             }
         } else if (this.state === 'LEAP') {
-            // High arc airborne physics
             this.x += this.vx - scrollSpeed;
             this.vy += this.gravity;
             this.y += this.vy;
@@ -246,7 +237,6 @@ export class MangyCat {
                 this.onBench = false;
                 this.benchRef = null;
                 this.state = 'LAND';
-                this.landTimer = 14;
 
                 // Dust particle impact on landing
                 if (particles) {
@@ -263,36 +253,105 @@ export class MangyCat {
                         });
                     }
                 }
+
+                // Landing recovery time: very little rest after Jump 2!
+                if (this.jumpStep === 1) {
+                    this.landTimer = 10;
+                } else if (this.jumpStep === 2) {
+                    this.landTimer = 8; // Very little rest time!
+                } else {
+                    this.landTimer = 14;
+                }
             }
         } else if (this.state === 'LAND') {
             this.landTimer--;
             if (this.landTimer <= 0) {
-                this.state = 'SHIFT';
-                // Reset jump interval to 2-4 seconds (120-240 ticks at 60Hz)
-                this.jumpCooldown = 120 + Math.floor(Math.random() * 120);
-                this.standPose = 1;
+                if (this.jumpStep === 1) {
+                    // Jump 1 complete: enter wiggle before calculated pounce
+                    this.state = 'WIGGLE';
+                    this.wiggleTimer = 26 + Math.floor(Math.random() * 8); // Tense wiggle
+                    this.wigglePhase = 0;
+                } else if (this.jumpStep === 2) {
+                    // Jump 2 complete: jump backward a third time if time and luck allow
+                    let luckChance = 0.35;
+                    if (this.difficulty === 'medium') luckChance = 0.65;
+                    else if (this.difficulty === 'hard' || this.difficulty === 'endless') luckChance = 0.85;
+
+                    const timeAllows = (this.x > -60 && this.x < 960);
+                    const luckAllows = (Math.random() < luckChance);
+
+                    if (timeAllows && luckAllows) {
+                        this.startBackwardJump(scrollSpeed, playerX);
+                    } else {
+                        this.state = 'SHIFT';
+                        this.jumpCooldown = 180;
+                    }
+                } else {
+                    this.state = 'SHIFT';
+                    this.jumpCooldown = 180;
+                }
+            }
+        } else if (this.state === 'WIGGLE') {
+            this.wiggleTimer--;
+            this.wigglePhase += 0.45; // Rapid nervous wiggle
+            this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
+
+            if (this.wiggleTimer <= 0) {
+                this.startCalculatedPounce(scrollSpeed, playerX);
+            }
+        } else if (this.state === 'SHIFT') {
+            this.shiftTimer++;
+            if (this.shiftTimer >= 10) {
                 this.shiftTimer = 0;
+                this.standPose = this.standPose === 1 ? 2 : 1;
             }
         }
     }
 
-    startLeap(playerX, scrollSpeed) {
+    startFirstJump() {
+        this.jumpStep = 1;
         this.state = 'LEAP';
         sounds.playCatSwipe();
-
-        // Detach from bench so it lands on ground trail
         this.onBench = false;
         this.benchRef = null;
 
-        // High parabolic arc: -12.5 reaches ~160px above ground (approx y=278 apex)
-        this.vy = -12.5;
+        // Immediately jump forward into the screen toward JoJo
+        this.vy = -11.5;
+        this.vx = -4.5;
+        this.facing = 'left';
+    }
 
-        // Calculate horizontal trajectory toward JoJo
-        const distToPlayer = (playerX + 35) - (this.x + this.width / 2);
-        const airTime = (Math.abs(this.vy) / this.gravity) * 2; // ~60 ticks total airtime
-        const targetVx = distToPlayer / airTime;
-        // Menacing forward jump velocity
-        this.vx = Math.min(-1.8, Math.max(-6.5, targetVx));
+    startCalculatedPounce(scrollSpeed, playerX) {
+        this.jumpStep = 2;
+        this.state = 'LEAP';
+        sounds.playCatSwipe();
+        this.onBench = false;
+        this.benchRef = null;
+
+        // High calculated pounce arc
+        this.vy = -12.5;
+        const airTime = (Math.abs(this.vy) / this.gravity) * 2; // ~60 ticks
+
+        // Pounce directly at JoJo's position
+        const targetX = playerX + 25;
+        const requiredVx = scrollSpeed + (targetX - this.x) / airTime;
+
+        this.vx = Math.min(-1.5, Math.max(-8.5, requiredVx));
+        this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
+    }
+
+    startBackwardJump(scrollSpeed, playerX) {
+        this.jumpStep = 3;
+        this.state = 'LEAP';
+        sounds.playCatSwipe();
+        this.onBench = false;
+        this.benchRef = null;
+
+        // Jump backward a third time with very little rest time
+        this.vy = -11.5;
+        // Vaults backward to the right overcoming scroll speed
+        this.vx = scrollSpeed + 4.5;
+        this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
     }
 
     getHitbox() {
@@ -305,7 +364,7 @@ export class MangyCat {
             w = this.width * 0.85;
             h = this.height * 0.8;
             y = this.y - h;
-        } else if (this.state === 'ROCK' || this.state === 'LAND') {
+        } else if (this.state === 'WIGGLE' || this.state === 'LAND' || this.state === 'SPAWN_PREP') {
             h = this.height * 0.65;
             y = this.y - h;
         }
@@ -323,24 +382,24 @@ export class MangyCat {
         if (this.state === 'SHIFT') {
             key = this.standPose === 1 ? 'cat_mangy_stand_1' : 'cat_mangy_stand_2';
             if (this.onBench) {
-                // If on bench seat, uses crouch or alert stand
                 key = this.standPose === 1 ? 'cat_mangy_crouch' : 'cat_mangy_stand_1';
             }
-        } else if (this.state === 'ROCK') {
+        } else if (this.state === 'SPAWN_PREP') {
+            key = 'cat_mangy_stand_2';
+        } else if (this.state === 'WIGGLE') {
             key = 'cat_mangy_pounce_ready';
-            // Menacing back and forth rocking motion
-            const rockOffset = Math.sin(this.rockPhase) * 6;
-            drawX += rockOffset;
+            // Menacing rapid nervous wiggle
+            const wiggleOffset = Math.sin(this.wigglePhase) * 7;
+            drawX += wiggleOffset;
         } else if (this.state === 'LEAP') {
-            // Trajectory-aware leap poses
             if (this.vy < -3) {
-                key = 'cat_mangy_leap_1'; // High launch
+                key = 'cat_mangy_leap_1';
                 w += 24;
             } else if (this.vy >= -3 && this.vy <= 3) {
-                key = 'cat_mangy_leap_2'; // Apex spread-eagle
+                key = 'cat_mangy_leap_2';
                 w += 28;
             } else {
-                key = 'cat_mangy_leap_3'; // Downward dive
+                key = 'cat_mangy_leap_3';
                 w += 24;
             }
         } else if (this.state === 'LAND') {
@@ -350,7 +409,6 @@ export class MangyCat {
             drawY = this.y - h;
         }
 
-        // Default sprite faces right, so mirror horizontally when facing JoJo to the left
         const isFlipped = (this.facing === 'left');
         sprites.draw(ctx, key, drawX, drawY, w, h, isFlipped);
     }
@@ -417,6 +475,8 @@ export class Squirrel {
         this.stage = 'hidden';
         this.timer = 0;
         this.hasThrown = false;
+        // Squirrels appear even earlier with randomized popup distance (720 - 920px)
+        this.triggerDist = 720 + Math.floor(Math.random() * 200);
         this.hasSecondAcorn = Math.random() < 0.30; // 30% chance of follow-up throw after passing
         this.hasThrownSecond = false;
         this.facing = 'left'; // 'left' when JoJo is ahead, 'right' when JoJo passes
@@ -426,8 +486,8 @@ export class Squirrel {
         this.x -= scrollSpeed;
         const distToPlayer = this.x - playerX;
 
-        // Stage A: First Acorn Throw (from ahead in an arc)
-        if (this.stage === 'hidden' && !this.hasThrown && distToPlayer < 540) {
+        // Stage A: First Acorn Throw (appears even earlier, dramatic high vertical arc)
+        if (this.stage === 'hidden' && !this.hasThrown && distToPlayer < this.triggerDist) {
             this.stage = 'popup';
             this.timer = 18;
             this.facing = 'left';
@@ -445,12 +505,27 @@ export class Squirrel {
                 if (!this.hasThrown) {
                     this.hasThrown = true;
                     sounds.playAcornThrow();
-                    // Lob acorn with an upward arc toward JoJo
+                    // Lob acorn with high vertical arc directly into JoJo's path
                     const acornX = this.x - 10;
                     const acornY = this.y - 85;
-                    const acornVx = -3.8;
-                    const acornVy = -4.8;
-                    acornList.push(new Acorn(acornX, acornY, acornVx, acornVy, 0.20));
+                    const acornVy = -7.8; // High dramatic vertical arc
+                    const acornGravity = 0.22;
+
+                    // Calculate flight airtime to reach player ground level
+                    const targetGroundY = 438;
+                    const riseTime = Math.abs(acornVy) / acornGravity; // ~35.5 ticks
+                    const apexY = acornY - (acornVy * acornVy) / (2 * acornGravity);
+                    const fallDistance = targetGroundY - apexY;
+                    const fallTime = Math.sqrt((2 * fallDistance) / acornGravity); // ~47 ticks
+                    const totalAirTime = riseTime + fallTime; // ~82.5 ticks
+
+                    // Aim trajectory lands directly in JoJo's path
+                    const targetX = playerX + 15 + Math.random() * 25;
+                    const netSpeed = (targetX - acornX) / totalAirTime;
+                    const clampedNetSpeed = Math.min(-1.5, Math.max(-8.0, netSpeed));
+                    const acornVx = scrollSpeed + clampedNetSpeed;
+
+                    acornList.push(new Acorn(acornX, acornY, acornVx, acornVy, acornGravity));
                 }
             }
         } else if (this.stage === 'throw') {
@@ -498,12 +573,12 @@ export class Squirrel {
                 if (!this.hasThrownSecond) {
                     this.hasThrownSecond = true;
                     sounds.playAcornThrow();
-                    // Lob follow-up acorn forward in an arc chasing JoJo
+                    // Lob follow-up acorn with high arc chasing JoJo
                     const acornX = this.x + this.width + 5;
                     const acornY = this.y - 85;
                     const acornVx = scrollSpeed + 5.2; // Overcome scroll speed to travel right
-                    const acornVy = -4.8;
-                    acornList.push(new Acorn(acornX, acornY, acornVx, acornVy, 0.20));
+                    const acornVy = -7.0; // High arc
+                    acornList.push(new Acorn(acornX, acornY, acornVx, acornVy, 0.22));
                 }
             }
         } else if (this.stage === 'throw_second') {

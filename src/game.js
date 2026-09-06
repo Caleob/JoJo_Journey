@@ -52,13 +52,62 @@ export class Game {
         this.victoryBannerX = -999;
         this.showVictoryModal = false;
 
+        // Interactive Controls Card Cycling
+        this.controlCycleTimer = null;
+        this.controlCycleIndex = 0;
+        this.controlCycleKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'];
+        this.controlKeyData = {
+            'ArrowUp': { title: 'JUMP', desc: 'Leap over cats, pit holes & benches' },
+            'ArrowDown': { title: 'CROUCH / CRAWL', desc: 'Belly crawl under benches & flying nuts' },
+            'ArrowLeft': { title: 'MOVE LEFT', desc: 'Slight brake & ease back' },
+            'ArrowRight': { title: 'MOVE RIGHT', desc: 'Surge forward along the trail' },
+            'Space': { title: 'JUMP', desc: 'High leap into the air (Spacebar or Up)' }
+        };
+
+        // In-Card Enemy Cycler
+        this.currentEnemyIndex = 0;
+        this.enemyCatalog = [
+            {
+                name: 'FAT CAT (TABBY)',
+                sprite: 'assets/cat/fat/cat_sit.png',
+                desc: 'Lounges lazily on the trail or benches. Swipes a lightning-fast claw when JoJo gets close!',
+                tip: 'Leap over him, or belly crawl beneath if perched on a bench.'
+            },
+            {
+                name: 'MANGY CAT (TUXEDO)',
+                sprite: 'assets/sprites/cat/mangy/cat_stand_1.png',
+                desc: 'Twitches nervously, rocks back and forth, then catapults in a high airborne leap right at you!',
+                tip: 'Surge forward under his flight arc, or wait and jump clean as he lands.'
+            },
+            {
+                name: 'BUSH BANDIT SQUIRREL',
+                sprite: 'assets/sprites/squirrel/sq_throw.png',
+                desc: 'Pops out of roadside brush to lob high-spinning acorns. Watch out for sneak rear throws!',
+                tip: 'Belly crawl right under high nuts, or time a leap over low throws.'
+            },
+            {
+                name: 'BENCHES & PIT HOLES',
+                sprite: 'assets/sprites/items/hole.png',
+                desc: 'Benches can be leaped onto or crawled under. Pit holes are bottomless traps (instant game over)!',
+                tip: 'Always keep enough forward speed to jump clear across holes.'
+            },
+            {
+                name: 'SIZZLING BACON 🥓',
+                sprite: 'assets/sprites/items/bacon.png',
+                desc: 'Delicious snack strips along the wilderness trail. Heals +1 Heart and awards +150 bonus score!',
+                tip: 'Collect every strip to stay at full health for tough obstacles ahead.'
+            }
+        ];
+
         this.loopStarted = false;
         this.animFrameId = null;
     }
 
     async init() {
         await sprites.loadAll();
-        this.updateHUD();
+        this.resetGame();
+        this.setupControlCycle();
+        this.renderCurrentEnemy();
         this.startLoop();
     }
 
@@ -72,9 +121,14 @@ export class Game {
             this.keys[e.code] = true;
             sounds.init();
 
-            if (e.code === 'Space') {
+            if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
                 if (this.state === 'PLAYING') {
                     this.player.jump();
+                }
+            }
+            if (e.code === 'Escape') {
+                if (this.state === 'PLAYING' || this.state === 'PAUSED') {
+                    this.togglePause();
                 }
             }
             if (e.code === 'KeyP') {
@@ -86,15 +140,101 @@ export class Game {
             if (e.code === 'KeyF') {
                 this.toggleFullscreen();
             }
+            if (e.code === 'Enter' || e.code === 'NumpadEnter') {
+                if (this.state === 'STAGE_CLEAR' || this.state === 'GAME_OVER') {
+                    this.returnToMenu();
+                }
+            }
         });
 
         window.addEventListener('keyup', (e) => {
             this.keys[e.code] = false;
         });
+
+        window.addEventListener('blur', () => {
+            this.keys = {};
+        });
     }
 
-    startGame(difficulty = 'medium') {
-        this.difficulty = difficulty;
+    setupControlCycle() {
+        const keys = document.querySelectorAll('.keycap-interactive');
+        keys.forEach(k => {
+            k.addEventListener('mouseenter', () => {
+                this.pauseControlCycle();
+                this.highlightControlKey(k.getAttribute('data-key'));
+            });
+            k.addEventListener('mouseleave', () => {
+                this.startControlCycle();
+            });
+        });
+
+        this.startControlCycle();
+    }
+
+    highlightControlKey(keyName) {
+        document.querySelectorAll('.keycap-interactive').forEach(el => {
+            if (el.getAttribute('data-key') === keyName) {
+                el.classList.add('active-key');
+            } else {
+                el.classList.remove('active-key');
+            }
+        });
+
+        const data = this.controlKeyData[keyName];
+        if (data) {
+            const titleEl = document.getElementById('feedbackTitle');
+            const descEl = document.getElementById('feedbackDesc');
+            if (titleEl) titleEl.textContent = data.title;
+            if (descEl) descEl.textContent = data.desc;
+        }
+    }
+
+    startControlCycle() {
+        if (this.controlCycleTimer) clearInterval(this.controlCycleTimer);
+        this.controlCycleTimer = setInterval(() => {
+            if (this.state !== 'MENU') return;
+            const keyName = this.controlCycleKeys[this.controlCycleIndex];
+            this.highlightControlKey(keyName);
+            this.controlCycleIndex = (this.controlCycleIndex + 1) % this.controlCycleKeys.length;
+        }, 1500);
+    }
+
+    pauseControlCycle() {
+        if (this.controlCycleTimer) {
+            clearInterval(this.controlCycleTimer);
+            this.controlCycleTimer = null;
+        }
+    }
+
+    cycleEnemy(direction) {
+        this.currentEnemyIndex = (this.currentEnemyIndex + direction + this.enemyCatalog.length) % this.enemyCatalog.length;
+        this.renderCurrentEnemy();
+    }
+
+    renderCurrentEnemy() {
+        const item = this.enemyCatalog[this.currentEnemyIndex];
+        if (!item) return;
+
+        const countEl = document.getElementById('enemyCountBadge');
+        if (countEl) countEl.textContent = `${this.currentEnemyIndex + 1} / ${this.enemyCatalog.length}`;
+
+        const nameEl = document.getElementById('enemyName');
+        if (nameEl) nameEl.textContent = item.name;
+
+        const imgEl = document.getElementById('enemySpriteImg');
+        if (imgEl) {
+            imgEl.src = item.sprite;
+            imgEl.alt = item.name;
+        }
+
+        const descEl = document.getElementById('enemyDesc');
+        if (descEl) descEl.textContent = item.desc;
+
+        const tipEl = document.getElementById('enemyTip');
+        if (tipEl) tipEl.innerHTML = `<strong>Survival Tip:</strong> ${item.tip}`;
+    }
+
+    resetGame() {
         this.distance = 0;
         this.score = 0;
         this.obstacles = [];
@@ -103,16 +243,33 @@ export class Game {
         this.particles = [];
         this.victoryBannerX = -999;
         this.showVictoryModal = false;
+        this.keys = {}; // Clear any stuck input keys
+        this.spawnTimer = 80;
 
-        const config = this.diffConfigs[this.difficulty];
+        const config = this.diffConfigs[this.difficulty] || this.diffConfigs['medium'];
+        this.currentSpeed = config.baseSpeed;
+
+        // Fresh instances guarantee 100% clean initial state with zero stale properties
+        this.player = new Player(this.canvas);
+        this.world = new World(this.canvas);
+        this.updateHUD();
+    }
+
+    startGame(difficulty = 'medium') {
+        this.difficulty = difficulty;
+        this.keys = {}; // Clear inputs
+        this.resetGame();
+
+        const config = this.diffConfigs[this.difficulty] || this.diffConfigs['medium'];
         this.currentSpeed = config.baseSpeed;
         this.spawnTimer = Math.floor(config.spawnMin * 0.75);
 
-        this.player.reset();
+        this.resetLoopTiming();
         this.state = 'PLAYING';
 
         sounds.stopJingles();
         sounds.startMusic();
+        this.pauseControlCycle();
         this.hideAllOverlays();
         this.updateHUD();
     }
@@ -152,9 +309,11 @@ export class Game {
         this.state = 'MENU';
         sounds.stopMusic();
         sounds.stopJingles();
+        this.resetGame();
         this.hideAllOverlays();
         const menu = document.getElementById('menuOverlay');
         if (menu) menu.classList.remove('hidden');
+        this.startControlCycle();
     }
 
     spawnObstaclePattern() {
@@ -181,7 +340,7 @@ export class Game {
                 const catX = bench.x + (bench.width - 85) / 2;
                 const catY = bench.y + bench.seatOffset;
                 const cat = catBreed === 'mangy'
-                    ? new MangyCat(catX, catY, true, bench)
+                    ? new MangyCat(catX, catY, true, bench, this.difficulty)
                     : new FatCat(catX, catY, true, bench);
                 this.obstacles.push(cat);
                 bench.hasCat = true;
@@ -206,7 +365,7 @@ export class Game {
             // Ground Cat (fat or mangy) walking along the path
             const catBreed = Math.random() < 0.5 ? 'fat' : 'mangy';
             const cat = catBreed === 'mangy'
-                ? new MangyCat(x, groundY, false, null)
+                ? new MangyCat(x, groundY, false, null, this.difficulty)
                 : new FatCat(x, groundY, false, null);
             this.obstacles.push(cat);
             if (Math.random() < 0.35) {
@@ -272,7 +431,7 @@ export class Game {
 
         // Dynamic speed adjustment based on JoJo's surge / brake (expanded maneuverability)
         if (this.keys['ArrowRight']) {
-            scrollSpeed *= 1.20; // Agile speed surge
+            scrollSpeed *= 1.10; // Halved forward dash boost (previously 1.20)
         } else if (this.keys['ArrowLeft']) {
             scrollSpeed *= 0.82; // Controlled brake / hang back
         }
@@ -420,17 +579,26 @@ export class Game {
         this.state = 'STAGE_CLEAR';
         sounds.stopMusic();
         sounds.playVictory();
+        this.keys = {}; // Reset all input keys
 
-        document.getElementById('victoryOverlay').classList.remove('hidden');
-        document.getElementById('vic-difficulty').textContent = this.difficulty.toUpperCase();
-        document.getElementById('vic-score').textContent = this.score;
-        document.getElementById('vic-bacon').textContent = this.player.baconCount;
+        const vicOverlay = document.getElementById('victoryOverlay');
+        if (vicOverlay) vicOverlay.classList.remove('hidden');
+
+        const diffEl = document.getElementById('vic-difficulty');
+        if (diffEl) diffEl.textContent = this.difficulty.toUpperCase();
+
+        const scoreEl = document.getElementById('vic-score');
+        if (scoreEl) scoreEl.textContent = this.score;
+
+        const baconEl = document.getElementById('vic-bacon');
+        if (baconEl && this.player) baconEl.textContent = this.player.baconCount;
     }
 
     gameOver() {
         this.state = 'GAME_OVER';
         sounds.stopMusic();
         sounds.playGameOver();
+        this.keys = {}; // Reset all input keys
 
         document.getElementById('gameoverOverlay').classList.remove('hidden');
     }
@@ -506,8 +674,8 @@ export class Game {
             }
         }
 
-        // 6. Finish Line Banner (if near 1000m)
-        if (this.victoryBannerX > -500) {
+        // 6. Finish Line Signpost (only if playing/cleared near 1000m)
+        if (this.state !== 'MENU' && this.victoryBannerX > -500) {
             this.drawFinishGate(this.ctx, this.victoryBannerX);
         }
 
@@ -523,61 +691,12 @@ export class Game {
     drawFinishGate(ctx, x) {
         const groundY = this.player.groundY;
 
-        // Rendered rustic Dog Park Signpost
+        // Rendered rustic Dog Park Signpost PNG (standalone end-of-trail marker)
         const signW = 180;
         const signH = 185;
-        const signX = x + 80;
+        const signX = x + 30;
         const signY = groundY - signH + 10;
         sprites.draw(ctx, 'signpost_dogpark', signX, signY, signW, signH);
-
-        // Rustic Trailhead Arch with wooden timber posts
-        const archLeftX = x - 40;
-        const archRightX = x + 270;
-        const archH = 230;
-        const archY = groundY - archH;
-
-        // Timber posts (rustic bark & woodgrain)
-        ctx.fillStyle = '#4a2f13';
-        ctx.fillRect(archLeftX, archY, 22, archH);
-        ctx.fillRect(archRightX, archY, 22, archH);
-
-        // Timber grain highlights
-        ctx.fillStyle = '#7a5126';
-        ctx.fillRect(archLeftX + 3, archY, 6, archH);
-        ctx.fillRect(archRightX + 3, archY, 6, archH);
-
-        // Top rustic wooden crossbeam
-        const beamX = archLeftX - 15;
-        const beamW = archRightX - archLeftX + 52;
-        ctx.fillStyle = '#5c3a19';
-        ctx.fillRect(beamX, archY + 10, beamW, 44);
-        ctx.fillStyle = '#3a230d';
-        ctx.fillRect(beamX, archY + 54, beamW, 4);
-        ctx.strokeStyle = '#2d1a08';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(beamX, archY + 10, beamW, 44);
-
-        // Trailhead lettering
-        ctx.fillStyle = '#fef08a';
-        ctx.font = 'bold 14px "Press Start 2P", monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('DOG PARK TRAILHEAD', beamX + beamW / 2, archY + 38);
-
-        // Festooned trail pennants hanging under crossbeam
-        const flagColors = ['#f43f5e', '#38bdf8', '#fbbf24', '#34d399', '#f43f5e', '#a855f7'];
-        const flagCount = 8;
-        const flagStep = (beamW - 20) / flagCount;
-        for (let f = 0; f < flagCount; f++) {
-            const fx = beamX + 10 + f * flagStep;
-            const fy = archY + 56;
-            ctx.fillStyle = flagColors[f % flagColors.length];
-            ctx.beginPath();
-            ctx.moveTo(fx, fy);
-            ctx.lineTo(fx + flagStep * 0.8, fy);
-            ctx.lineTo(fx + flagStep * 0.4, fy + 16);
-            ctx.closePath();
-            ctx.fill();
-        }
     }
 
     toggleFullscreen() {
@@ -595,23 +714,29 @@ export class Game {
         }
     }
 
+    resetLoopTiming() {
+        this.lastLoopTime = performance.now();
+        this.loopAccumulator = 0;
+    }
+
     startLoop() {
         if (this.loopStarted) return;
         this.loopStarted = true;
 
-        let lastTime = performance.now();
-        let accumulator = 0;
+        this.lastLoopTime = performance.now();
+        this.loopAccumulator = 0;
         const FIXED_STEP = 1000 / 60; // Exact 60 ticks/second (16.6667 ms)
         const MAX_FRAME_TIME = 100; // Guard against huge delta leaps when tab is backgrounded
 
         const loop = (currentTime) => {
-            const frameTime = Math.min(currentTime - lastTime, MAX_FRAME_TIME);
-            lastTime = currentTime;
-            accumulator += frameTime;
+            if (!this.lastLoopTime) this.lastLoopTime = currentTime;
+            const frameTime = Math.min(currentTime - this.lastLoopTime, MAX_FRAME_TIME);
+            this.lastLoopTime = currentTime;
+            this.loopAccumulator = (this.loopAccumulator || 0) + frameTime;
 
-            while (accumulator >= FIXED_STEP) {
+            while (this.loopAccumulator >= FIXED_STEP) {
                 this.update();
-                accumulator -= FIXED_STEP;
+                this.loopAccumulator -= FIXED_STEP;
             }
 
             this.draw();

@@ -47,6 +47,8 @@ export class Player {
 
         // Stats
         this.baconCount = 0;
+        this.settleDelayTimer = 0;
+        this.isCrawlingUnderBench = false;
     }
 
     reset() {
@@ -65,6 +67,12 @@ export class Player {
         this.state = 'WALK';
         this.targetX = this.canvas.width * this.baseXRatio;
         this.x = this.targetX;
+        this.baconCount = 0;
+        this.settleDelayTimer = 0;
+        this.isCrawlingUnderBench = false;
+        this.animTimer = 0;
+        this.walkFrame = 0;
+        this.crawlFrame = 0;
     }
 
     jump() {
@@ -127,21 +135,31 @@ export class Player {
             this.invulnerableTimer--;
         }
 
-        // Horizontal target calculation (expanded maneuverability for tactics & strategy)
+        // Horizontal target calculation (expanded maneuverability with slow equilibrium drift)
         const minX = this.canvas.width * 0.08;   // ~80px: hang back near left screen
         const normalX = this.canvas.width * this.baseXRatio; // ~200px: resting position
         const maxX = this.canvas.width * 0.58;     // ~580px: surge forward past mid-screen
 
-        let lerpFactor = 0.035; // Gentle return to baseline when idle
+        let lerpFactor = 0.006; // Very slow, gentle drift toward baseline when idle
 
         if (keys['ArrowRight']) {
             this.targetX = maxX;
-            lerpFactor = 0.09; // Snappy forward surge
+            lerpFactor = 0.045; // Halved forward dash speed (previously 0.09)
+            this.settleDelayTimer = 45; // Delay settling after releasing
         } else if (keys['ArrowLeft']) {
             this.targetX = minX;
-            lerpFactor = 0.09; // Snappy brake / retreat
+            lerpFactor = 0.08; // Responsive brake / retreat
+            this.settleDelayTimer = 45;
         } else {
-            this.targetX = normalX;
+            // Player hangs out in place for a while before very slowly settling back
+            if (this.settleDelayTimer > 0) {
+                this.settleDelayTimer--;
+                this.targetX = this.x;
+                lerpFactor = 0;
+            } else {
+                this.targetX = normalX;
+                lerpFactor = 0.006; // Much slower settling toward baseline
+            }
         }
 
         // Belly crawl reduces forward movement speed slightly
@@ -149,14 +167,20 @@ export class Player {
             this.targetX = Math.min(this.targetX, normalX * 0.9);
         }
 
+        const prevX = this.x;
+
         // Smooth horizontal lerp
-        this.x += (this.targetX - this.x) * lerpFactor;
+        if (lerpFactor > 0) {
+            this.x += (this.targetX - this.x) * lerpFactor;
+        }
 
         // Handle Crawl & Bench collision
+        // Requirement: Down Arrow is needed to begin going under the bench, but no need to hold it.
+        // JoJo stays crouched until coming out the other side. Only failing to crouch when beginning matters.
         const wantCrawl = !!keys['ArrowDown'];
 
         let onBenchThisFrame = false;
-        let underBench = false;
+        let isUnderAnyBench = false;
         const footY = this.y;
 
         for (const obs of obstacles) {
@@ -169,11 +193,6 @@ export class Player {
                 const playerLeft = this.x + 15;
                 const playerRight = this.x + this.normalWidth - 15;
 
-                // Check if JoJo is currently underneath the bench clearance
-                if (playerRight >= benchLeft + 10 && playerLeft <= benchRight - 10 && footY >= this.groundY - 10 && !this.currentPlatform) {
-                    underBench = true;
-                }
-
                 // Landing on bench seat from above
                 if (playerRight >= benchLeft + 15 && playerLeft <= benchRight - 15) {
                     if (this.vy >= 0 && Math.abs(footY - benchTopY) < 22) {
@@ -182,6 +201,7 @@ export class Player {
                         this.isGrounded = true;
                         this.currentPlatform = obs;
                         onBenchThisFrame = true;
+                        this.isCrawlingUnderBench = false;
                     }
                 }
 
@@ -191,14 +211,47 @@ export class Player {
                     this.isGrounded = false;
                 }
 
-                // Bumping into bench front while walking normally (not crawling under, not on top)
-                if (!this.currentPlatform && !wantCrawl && !underBench && this.isGrounded) {
-                    if (playerRight >= benchLeft && playerLeft < benchLeft + 25 && footY > benchTopY + 15) {
-                        // Prevent walking forward through solid bench frame
-                        this.x = benchLeft - this.normalWidth + 15;
+                // Ground interaction with bench
+                if (!this.currentPlatform && this.isGrounded) {
+                    // Check if player footprint overlaps horizontally with bench
+                    if (playerRight >= benchLeft && playerLeft <= benchRight) {
+                        // If player is already crawling or taps Down Arrow to duck under
+                        if (wantCrawl || this.isCrawlingUnderBench) {
+                            this.isCrawlingUnderBench = true;
+                            isUnderAnyBench = true;
+                        } else {
+                            // Failed to crouch while trying to go under the bench:
+                            // Resolve collision based on which side JoJo is on or approached from:
+                            const prevLeft = prevX + 15;
+                            const prevRight = prevX + this.normalWidth - 15;
+                            const playerMidX = (playerLeft + playerRight) / 2;
+                            const benchMidX = (benchLeft + benchRight) / 2;
+
+                            // If JoJo approached from the right (moving backwards) OR is on the right half of the bench:
+                            if (prevLeft >= benchRight - 20 || playerMidX > benchMidX) {
+                                // Blocked at the bench's right edge so JoJo doesn't walk backwards through it
+                                this.x = benchRight - 15;
+                            } else {
+                                // Moving forward into bench from the left (or caught at front):
+                                // Blocked and pushed back by the solid front frame of the bench
+                                this.x = benchLeft - this.normalWidth + 15;
+                            }
+                        }
                     }
                 }
             }
+        }
+
+        // If no longer under any bench, release the under-bench crouch lock
+        if (!isUnderAnyBench && this.isCrawlingUnderBench) {
+            this.isCrawlingUnderBench = false;
+        }
+
+        // Fail condition: JoJo pushed off the screen to the far left
+        if (this.x + this.normalWidth < 0 || this.x < -30) {
+            this.hearts = 0;
+            this.isDead = true;
+            sounds.playHurt();
         }
 
         if (!onBenchThisFrame && this.currentPlatform) {
@@ -226,17 +279,21 @@ export class Player {
             }
         }
 
-        // Determine current state (forced crawl if under bench)
+        // Determine current state:
+        // JoJo stays crouched if player holds Down Arrow OR if currently passing under a bench
+        const shouldCrawl = (wantCrawl || this.isCrawlingUnderBench);
+
         if (!this.isGrounded) {
             this.state = 'JUMP';
-        } else if (wantCrawl || underBench) {
+        } else if (shouldCrawl) {
             this.state = 'CRAWL';
         } else {
             this.state = 'WALK';
         }
 
-        // Update animation frames (smooth ~10-12 fps cycle tuned for 8-frame loop)
-        this.animTimer += 0.035 * gameSpeed;
+        // Update animation frames (faster walk animation: ~0.065 to match steps to scroll speed)
+        const cycleRate = (this.state === 'WALK' ? 0.065 : 0.040);
+        this.animTimer += cycleRate * gameSpeed;
         if (this.animTimer >= 1.0) {
             this.animTimer = 0;
             this.walkFrame = (this.walkFrame + 1) % 8;

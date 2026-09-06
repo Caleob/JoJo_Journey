@@ -36,44 +36,138 @@
 
             <!-- Start Menu Overlay -->
             <div id="menuOverlay" class="overlay">
-                <h1 class="title-banner">JOJO'S JOURNEY</h1>
-                <p class="subtitle">An 8-Bit Side-Scrolling Dog Adventure along the Wilderness Trail</p>
+                <div class="menu-content">
+                    <h1 class="title-banner">JOJO'S JOURNEY</h1>
+                    <p class="subtitle">An 8-Bit Side-Scrolling Dog Adventure along the Wilderness Trail</p>
 
-                <div class="instructions-box">
-                    <div class="inst-item">
-                        <span class="key-badge">␣ SPACE / JUMP</span>
-                        <span>High leap over cats, holes & benches</span>
-                    </div>
-                    <div class="inst-item">
-                        <span class="key-badge">⬇️ DOWN / CRAWL</span>
-                        <span>Belly crawl under benches & flying nuts</span>
-                    </div>
-                    <div class="inst-item">
-                        <span class="key-badge">➡️ RIGHT / SURGE</span>
-                        <span>Slight speed surge forward</span>
-                    </div>
-                    <div class="inst-item">
-                        <span class="key-badge">⬅️ LEFT / SLOW</span>
-                        <span>Slight brake / ease back</span>
-                    </div>
-                    <div class="inst-item" style="grid-column: 1 / -1; justify-content: center; border-top: 1px dashed #334155; padding-top: 6px; margin-top: 2px;">
-                        <span class="key-badge">F</span> Fullscreen &nbsp;|&nbsp; <span class="key-badge">P</span> Pause &nbsp;|&nbsp; <span class="key-badge">M</span> Mute Sound
-                    </div>
-                </div>
+                    <!-- 3 Large Horizontal Cards -->
+                    <div class="intro-cards-row">
+                        <!-- Card 1: Controls -->
+                        <div class="intro-card card-controls" id="cardControls">
+                            <div class="card-header">
+                                <span class="card-tag">CONTROLS</span>
+                            </div>
+                            <!-- Arrow Keys Cluster & Spacebar -->
+                            <div class="keyboard-visual">
+                                <div class="arrow-cluster">
+                                    <div class="arrow-row-up">
+                                        <div class="keycap keycap-interactive" data-key="ArrowUp" id="key-ArrowUp">⬆️</div>
+                                    </div>
+                                    <div class="arrow-row-bottom">
+                                        <div class="keycap keycap-interactive" data-key="ArrowLeft" id="key-ArrowLeft">⬅️</div>
+                                        <div class="keycap keycap-interactive" data-key="ArrowDown" id="key-ArrowDown">⬇️</div>
+                                        <div class="keycap keycap-interactive" data-key="ArrowRight" id="key-ArrowRight">➡️</div>
+                                    </div>
+                                </div>
+                                <div class="spacebar-row">
+                                    <div class="keycap keycap-space keycap-interactive" data-key="Space" id="key-Space">␣ SPACEBAR</div>
+                                </div>
+                            </div>
+                            <!-- Dynamic Text Box -->
+                            <div class="control-feedback-box" id="controlFeedbackBox">
+                                <div class="feedback-title" id="feedbackTitle">JUMP</div>
+                                <div class="feedback-desc" id="feedbackDesc">Leap high over cats, holes & benches</div>
+                            </div>
+                        </div>
 
-                <div class="difficulty-select">
-                    <button class="diff-btn diff-easy" onclick="window.jojoGame.startGame('easy')">
-                        🟢 EASY (1000m)
-                    </button>
-                    <button class="diff-btn diff-medium" onclick="window.jojoGame.startGame('medium')">
-                        🟡 MEDIUM (1000m)
-                    </button>
-                    <button class="diff-btn diff-hard" onclick="window.jojoGame.startGame('hard')">
-                        🔴 HARD (1000m)
-                    </button>
-                    <button class="diff-btn diff-endless" onclick="window.jojoGame.startGame('endless')">
-                        ♾️ ENDLESS RUN
-                    </button>
+                        <!-- Card 2: Enemies (In-Card Cycler) -->
+                        <div class="intro-card card-enemies" id="cardEnemies">
+                            <div class="card-header enemies-header">
+                                <span class="card-tag">ENEMIES & HAZARDS</span>
+                                <div class="enemy-nav-arrows">
+                                    <button class="enemy-nav-btn" onclick="window.jojoGame.cycleEnemy(-1)" title="Previous Enemy (Up)">▲</button>
+                                    <span class="enemy-count-badge" id="enemyCountBadge">1 / 5</span>
+                                    <button class="enemy-nav-btn" onclick="window.jojoGame.cycleEnemy(1)" title="Next Enemy (Down)">▼</button>
+                                </div>
+                            </div>
+
+                            <div class="enemy-display-body" id="enemyDisplayBody">
+                                <div class="enemy-preview-area">
+                                    <div class="enemy-icon-frame" id="enemyIconFrame">
+                                        <img id="enemySpriteImg" src="assets/cat/fat/cat_sit.png" alt="Enemy" class="enemy-card-pixel-img" />
+                                    </div>
+                                    <div class="enemy-title-row">
+                                        <span class="enemy-name" id="enemyName">FAT CAT (TABBY)</span>
+                                    </div>
+                                </div>
+                                <p class="enemy-desc" id="enemyDesc">Lounges lazily on the trail or benches. Swipes a lightning-fast claw when JoJo gets close!</p>
+                                <div class="enemy-tip-box" id="enemyTip"><strong>Survival Tip:</strong> Leap over him, or belly crawl beneath if perched on a bench.</div>
+                            </div>
+                        </div>
+
+                        <!-- Card 3: Special Keys -->
+                        <div class="intro-card card-special" id="cardSpecial">
+                            <div class="card-header">
+                                <span class="card-tag">SPECIAL KEYS</span>
+                            </div>
+                            <div class="special-keys-grid">
+                                <div class="special-item">
+                                    <div class="keycap keycap-mini">P</div>
+                                    <div class="special-info">
+                                        <div class="special-action">PAUSE GAME</div>
+                                        <div class="special-hint">Freeze action & music</div>
+                                    </div>
+                                </div>
+                                <div class="special-item">
+                                    <div class="keycap keycap-mini">M</div>
+                                    <div class="special-info">
+                                        <div class="special-action">MUTE SOUND</div>
+                                        <div class="special-hint">Toggle audio effects & BGM</div>
+                                    </div>
+                                </div>
+                                <div class="special-item">
+                                    <div class="keycap keycap-mini">F</div>
+                                    <div class="special-info">
+                                        <div class="special-action">FULLSCREEN</div>
+                                        <div class="special-hint">Arcade cabinet fullscreen view</div>
+                                    </div>
+                                </div>
+                                <div class="special-item">
+                                    <div class="keycap keycap-mini">ESC</div>
+                                    <div class="special-info">
+                                        <div class="special-action">PAUSE / ESCAPE</div>
+                                        <div class="special-hint">Quick toggle game pause</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Large Difficulty Selection Cards -->
+                    <div class="difficulty-select">
+                        <button class="diff-btn diff-easy" onclick="window.jojoGame.startGame('easy')">
+                            <div class="diff-btn-header">
+                                <span class="diff-icon">🟢</span>
+                                <span class="diff-name">EASY</span>
+                            </div>
+                            <span class="diff-goal">1000m Goal</span>
+                            <span class="diff-desc">Gentle jog & relaxed hazards</span>
+                        </button>
+                        <button class="diff-btn diff-medium" onclick="window.jojoGame.startGame('medium')">
+                            <div class="diff-btn-header">
+                                <span class="diff-icon">🟡</span>
+                                <span class="diff-name">MEDIUM</span>
+                            </div>
+                            <span class="diff-goal">1000m Goal</span>
+                            <span class="diff-desc">Classic arcade trail challenge</span>
+                        </button>
+                        <button class="diff-btn diff-hard" onclick="window.jojoGame.startGame('hard')">
+                            <div class="diff-btn-header">
+                                <span class="diff-icon">🔴</span>
+                                <span class="diff-name">HARD</span>
+                            </div>
+                            <span class="diff-goal">1000m Goal</span>
+                            <span class="diff-desc">Fierce speed & aggressive cats</span>
+                        </button>
+                        <button class="diff-btn diff-endless" onclick="window.jojoGame.startGame('endless')">
+                            <div class="diff-btn-header">
+                                <span class="diff-icon">♾️</span>
+                                <span class="diff-name">ENDLESS</span>
+                            </div>
+                            <span class="diff-goal">No Limit</span>
+                            <span class="diff-desc">Survive the ultimate marathon</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -89,17 +183,14 @@
 
             <!-- Victory Overlay (1000m Goal Reached) -->
             <div id="victoryOverlay" class="overlay hidden">
-                <div class="modal-card" style="max-width: 580px;">
+                <div class="modal-card victory-card">
                     <h2>🎉 YOU MADE IT! 🎉</h2>
-                    <img src="assets/sprites/environment/victory_newspaper.png" alt="Victory Newspaper" style="width: 100%; max-width: 480px; border-radius: 6px; margin: 10px auto; border: 3px solid #334155; display: block;" />
-                    <p style="color: #6ee7b7; font-weight: bold; margin-bottom: 12px;">JoJo braved the wild trail and arrived safely at the Dog Park!</p>
-                    <div class="modal-stats">
-                        <div>DIFFICULTY: <span id="vic-difficulty" style="color: #fef08a;">MEDIUM</span></div>
-                        <div>FINAL SCORE: <span id="vic-score" style="color: #38bdf8;">0</span></div>
-                        <div>BACON COLLECTED: <span id="vic-bacon" style="color: #f43f5e;">0</span> 🥓</div>
-                    </div>
-                    <button class="modal-btn" onclick="window.jojoGame.startGame(window.jojoGame.difficulty)">PLAY AGAIN</button>
-                    <button class="modal-btn secondary" onclick="window.jojoGame.startGame('endless')">TRY ENDLESS</button>
+                    <img src="assets/sprites/environment/victory_newspaper.png" alt="Victory Newspaper" class="victory-newspaper-img" />
+                    <p class="victory-subtitle">JoJo braved the wild trail and arrived safely at the Dog Park!</p>
+                    <div class="play-again-prompt">Play Again?</div>
+                    <button class="modal-btn victory-action-btn" onclick="window.jojoGame.returnToMenu()">
+                        Absolutely! That was fun!
+                    </button>
                 </div>
             </div>
 
@@ -118,7 +209,7 @@
         </main>
     </div>
 
-    <script src="game.bundle.js"></script>
+    <script src="game.bundle.js?v=2.1"></script>
     <script>
         // Header buttons wiring
         document.getElementById('btn-mute').addEventListener('click', () => {

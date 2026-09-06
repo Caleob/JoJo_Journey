@@ -81,6 +81,13 @@ export class World {
         if (this.foreOffset > 10000) this.foreOffset %= 10000;
     }
 
+    reset() {
+        this.cloudOffset = 0;
+        this.farMountainOffset = 0;
+        this.midBgOffset = 0;
+        this.foreOffset = 0;
+    }
+
     draw(ctx) {
         // ==========================================
         // 1. SKY & SUN (Alpine Wilderness Morning)
