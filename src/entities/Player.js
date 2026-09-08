@@ -148,19 +148,19 @@ export class Player {
 
         if (this.state === 'VICTORY_JOY') {
             this.joyHopTimer++;
-            const hopPeriod = 22; // ~0.36s per hop cycle
+            const hopPeriod = 24; // ~0.4s per hop cycle
             const hopPhase = (this.joyHopTimer % hopPeriod) / hopPeriod;
             const hopIndex = Math.floor(this.joyHopTimer / hopPeriod);
 
-            // Sine parabolic bounce
-            const hopHeight = 22;
+            // Sine parabolic bounce - higher bounce per user request
+            const hopHeight = 36; // Raised from 22 to 36 (a little higher than current)
             const hopOffsetY = Math.sin(hopPhase * Math.PI) * hopHeight;
             this.y = this.groundY - hopOffsetY;
 
             // Small hops back and forth:
             // Hop 0: hops slightly forward, Hop 1: hops back, Hop 2: forward, Hop 3: back
             const hopDir = (hopIndex % 2 === 0) ? 1 : -1;
-            const hopDistance = 12;
+            const hopDistance = 14;
             const hopOffsetX = Math.sin(hopPhase * Math.PI) * hopDistance * hopDir;
             this.x = this.joyBaseX + hopOffsetX;
 
@@ -363,8 +363,8 @@ export class Player {
     }
 
     draw(ctx) {
-        // Flicker if invulnerable (do not flicker during victory sequences)
-        if (this.state !== 'VICTORY_JOY' && this.invulnerableTimer > 0 && this.invulnerableTimer < 9000 && Math.floor(this.invulnerableTimer / 5) % 2 === 0) {
+        // Flicker if invulnerable (do not flicker during victory sequences or when dead)
+        if (this.state !== 'VICTORY_JOY' && !this.isDead && this.invulnerableTimer > 0 && this.invulnerableTimer < 9000 && Math.floor(this.invulnerableTimer / 5) % 2 === 0) {
             return;
         }
 
@@ -399,7 +399,7 @@ export class Player {
         if (this.state === 'VICTORY_JOY') {
             const h = this.normalHeight;
             const w = 76; // Preserves stand_0 proportion
-            const hopPeriod = 22;
+            const hopPeriod = 24;
             const hopIndex = Math.floor(this.joyHopTimer / hopPeriod);
             const hopPhase = (this.joyHopTimer % hopPeriod) / hopPeriod;
 

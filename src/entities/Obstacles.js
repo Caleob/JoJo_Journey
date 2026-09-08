@@ -211,7 +211,7 @@ export class MangyCat {
             this.y = this.benchRef.y + this.benchRef.seatOffset;
             this.jumpCooldown--;
             if (this.jumpCooldown <= 0) {
-                this.startFirstJump();
+                this.startFirstJump(scrollSpeed, playerX);
             }
         } else if (this.state !== 'LEAP') {
             this.x -= scrollSpeed;
@@ -220,9 +220,9 @@ export class MangyCat {
         // State Machine
         if (this.state === 'SPAWN_PREP') {
             this.spawnPrepTimer--;
-            this.facing = 'left';
+            this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
             if (this.spawnPrepTimer <= 0) {
-                this.startFirstJump();
+                this.startFirstJump(scrollSpeed, playerX);
             }
         } else if (this.state === 'LEAP') {
             this.x += this.vx - scrollSpeed;
@@ -308,17 +308,23 @@ export class MangyCat {
         }
     }
 
-    startFirstJump() {
+    startFirstJump(scrollSpeed = 5.0, playerX = null) {
         this.jumpStep = 1;
         this.state = 'LEAP';
         sounds.playCatSwipe();
         this.onBench = false;
         this.benchRef = null;
 
-        // Immediately jump forward into the screen toward JoJo
         this.vy = -11.5;
-        this.vx = -4.5;
-        this.facing = 'left';
+        if (playerX !== null && playerX > this.x + 20) {
+            // JoJo is already ahead: bounce forward faster than scroll speed
+            this.vx = scrollSpeed + 4.0;
+            this.facing = 'right';
+        } else {
+            // Immediately jump forward into the screen toward JoJo
+            this.vx = -4.5;
+            this.facing = 'left';
+        }
     }
 
     startCalculatedPounce(scrollSpeed, playerX) {
@@ -334,24 +340,43 @@ export class MangyCat {
 
         // Pounce directly at JoJo's position
         const targetX = playerX + 25;
-        const requiredVx = scrollSpeed + (targetX - this.x) / airTime;
+        const dx = targetX - this.x;
 
-        this.vx = Math.min(-1.5, Math.max(-8.5, requiredVx));
-        this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
+        if (dx > 0) {
+            // JoJo is ahead of the cat (cat was passed or landed behind JoJo).
+            // Bounce forward at faster than scroll speed to get a second chance at hitting JoJo!
+            const forwardSpeedNeeded = dx / airTime;
+            const extraForward = Math.max(3.8, Math.min(7.2, forwardSpeedNeeded + 1.5));
+            this.vx = scrollSpeed + extraForward;
+            this.facing = 'right';
+        } else {
+            // JoJo is in front of the cat (to the left)
+            const requiredVx = scrollSpeed + dx / airTime;
+            this.vx = Math.max(-8.5, Math.min(-2.5, requiredVx));
+            this.facing = 'left';
+        }
     }
 
-    startBackwardJump(scrollSpeed, playerX) {
+    startThirdJump(scrollSpeed, playerX) {
         this.jumpStep = 3;
         this.state = 'LEAP';
         sounds.playCatSwipe();
         this.onBench = false;
         this.benchRef = null;
 
-        // Jump backward a third time with very little rest time
         this.vy = -11.5;
-        // Vaults backward to the right overcoming scroll speed
-        this.vx = scrollSpeed + 4.5;
-        this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
+        if (playerX > this.x + 20) {
+            // Vaults forward to the right faster than scroll speed
+            this.vx = scrollSpeed + 4.8;
+            this.facing = 'right';
+        } else {
+            this.vx = -4.5;
+            this.facing = 'left';
+        }
+    }
+
+    startBackwardJump(scrollSpeed, playerX) {
+        this.startThirdJump(scrollSpeed, playerX);
     }
 
     getHitbox() {

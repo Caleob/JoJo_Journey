@@ -32,10 +32,10 @@ export class Game {
 
         // Difficulty configs (Equalized bacon frequency across levels, with Easy vs Difficult balancing)
         this.diffConfigs = {
-            easy: { baseSpeed: 4.4, spawnMin: 140, spawnMax: 195, baconRate: 0.55, difficultBaconChance: 0.15 },
-            medium: { baseSpeed: 5.6, spawnMin: 100, spawnMax: 145, baconRate: 0.55, difficultBaconChance: 0.55 },
-            hard: { baseSpeed: 7.2, spawnMin: 70, spawnMax: 110, baconRate: 0.55, difficultBaconChance: 0.90 },
-            endless: { baseSpeed: 5.0, spawnMin: 90, spawnMax: 135, baconRate: 0.55, difficultBaconChance: 0.35 }
+            easy: { baseSpeed: 4.4, spawnMin: 140, spawnMax: 195, baconRate: 0.55, difficultBaconChance: 0.15, goalDistance: 900 },
+            medium: { baseSpeed: 5.6, spawnMin: 100, spawnMax: 145, baconRate: 0.55, difficultBaconChance: 0.55, goalDistance: 1000 },
+            hard: { baseSpeed: 7.2, spawnMin: 70, spawnMax: 110, baconRate: 0.55, difficultBaconChance: 0.90, goalDistance: 1200 },
+            endless: { baseSpeed: 5.0, spawnMin: 90, spawnMax: 135, baconRate: 0.55, difficultBaconChance: 0.35, goalDistance: Infinity }
         };
 
         this.currentSpeed = 5.6;
@@ -58,6 +58,13 @@ export class Game {
         this.winPhase = null;
         this.winTimer = 0;
         this.winFadeAlpha = 0.0;
+        this.winWalkStartX = null;
+        this.winWalkTargetX = null;
+
+        // Loss transition elements
+        this.lossPhase = null;
+        this.lossTimer = 0;
+        this.lossFadeAlpha = 0.0;
 
         // Interactive Controls Card Cycling
         this.controlCycleTimer = null;
@@ -83,8 +90,8 @@ export class Game {
             {
                 name: 'MANGY CAT (TUXEDO)',
                 sprite: 'assets/sprites/cat/mangy/cat_stand_1.png',
-                desc: 'Twitches nervously, rocks back and forth, then catapults in a high airborne leap right at you!',
-                tip: 'Surge forward under his flight arc, or wait and jump clean as he lands.'
+                desc: 'Twitches nervously, leaps into the trail, then bounces forward faster than scroll speed to chase JoJo down!',
+                tip: 'Leap clean over him or stay ahead—he can spring forward from behind for a dangerous second chance!'
             },
             {
                 name: 'BUSH BANDIT SQUIRREL',
@@ -127,15 +134,15 @@ export class Game {
                 e.preventDefault();
             }
 
-            // If in cinematic win sequence, user has lost control
-            if (this.winPhase !== null) {
+            // If in cinematic win or loss sequence, user has lost control
+            if (this.winPhase !== null || this.lossPhase !== null) {
                 if (e.code === 'KeyM') {
                     this.toggleMute();
                 }
                 if (e.code === 'KeyF') {
                     this.toggleFullscreen();
                 }
-                if ((e.code === 'Enter' || e.code === 'NumpadEnter') && this.state === 'STAGE_CLEAR') {
+                if ((e.code === 'Enter' || e.code === 'NumpadEnter') && (this.state === 'STAGE_CLEAR' || this.state === 'GAME_OVER')) {
                     this.returnToMenu();
                 }
                 return;
@@ -187,7 +194,7 @@ export class Game {
         });
 
         window.addEventListener('keyup', (e) => {
-            if (this.winPhase !== null) return;
+            if (this.winPhase !== null || this.lossPhase !== null) return;
             this.keys[e.code] = false;
         });
 
@@ -314,11 +321,17 @@ export class Game {
         this.winPhase = null;
         this.winTimer = 0;
         this.winFadeAlpha = 0.0;
+        this.winWalkStartX = null;
+        this.winWalkTargetX = null;
+        this.lossPhase = null;
+        this.lossTimer = 0;
+        this.lossFadeAlpha = 0.0;
         this.keys = {}; // Clear any stuck input keys
         this.spawnTimer = 80;
 
         const config = this.diffConfigs[this.difficulty] || this.diffConfigs['medium'];
         this.currentSpeed = config.baseSpeed;
+        this.goalDistance = config.goalDistance || 1000;
 
         // Fresh instances guarantee 100% clean initial state with zero stale properties
         this.player = new Player(this.canvas);
@@ -340,6 +353,7 @@ export class Game {
 
         const config = this.diffConfigs[this.difficulty] || this.diffConfigs['medium'];
         this.currentSpeed = config.baseSpeed;
+        this.goalDistance = config.goalDistance || 1000;
         this.spawnTimer = Math.floor(config.spawnMin * 0.75);
 
         this.resetLoopTiming();
@@ -556,17 +570,24 @@ export class Game {
         }
     }
 
+    startLossSequence() {
+        if (this.lossPhase !== null) return;
+        this.lossPhase = 'FADE_OUT';
+        this.lossTimer = 0;
+        this.lossFadeAlpha = 0.0;
+        this.keys = {}; // Relinquish player control
+        sounds.fadeOutMusic(800);
+    }
+
     startWinSequence() {
         this.winPhase = 'WALK_OUT';
         this.winTimer = 0;
         this.winFadeAlpha = 0.0;
-        this.keys = {}; // Relinquish player control
+        this.keys = {}; // Force all control keys (arrows) to lose connection as if player removed hand from keyboard
         this.player.invulnerableTimer = 99999;
-        this.player.currentPlatform = null;
-        this.player.isGrounded = true;
-        this.player.y = this.player.groundY;
-        this.player.vy = 0;
-        sounds.fadeOutMusic(1500);
+        this.winWalkStartX = null;
+        this.winWalkTargetX = null;
+        sounds.fadeOutMusic(1600);
     }
 
     update() {
@@ -582,31 +603,53 @@ export class Game {
             return;
         }
 
+        // Loss Transition Sequence (fade screen to black before lost dog poster)
+        if (this.lossPhase === 'FADE_OUT') {
+            this.lossTimer++;
+            this.currentSpeed = Math.max(0, this.currentSpeed * 0.90);
+            this.world.update(this.currentSpeed);
+
+            // Allow any airborne drop to land naturally on ground
+            if (!this.player.isGrounded) {
+                this.player.vy += this.player.gravity;
+                this.player.y += this.player.vy;
+                if (this.player.y >= this.player.groundY) {
+                    this.player.y = this.player.groundY;
+                    this.player.vy = 0;
+                    this.player.isGrounded = true;
+                }
+            }
+
+            // Smoothly fade screen to black over ~45 frames (0.75s)
+            this.lossFadeAlpha = Math.min(1.0, this.lossTimer / 45);
+
+            // Once fully black, trigger Game Over modal with lost dog poster
+            if (this.lossTimer >= 48 && this.lossFadeAlpha >= 1.0) {
+                this.gameOver();
+            }
+            return;
+        }
+
         if (this.player.isDead) {
-            this.gameOver();
+            this.startLossSequence();
             return;
         }
 
         // Win Transition Sequence: Phase 1 (Walk Out) & Phase 2 (Joy Hop)
         if (this.winPhase === 'WALK_OUT') {
             this.winTimer++;
-            const config = this.diffConfigs[this.difficulty] || this.diffConfigs['medium'];
-            const scrollSpeed = config.baseSpeed * 0.85;
-            this.currentSpeed = scrollSpeed;
 
-            // 1. Update World parallax and signpost
+            // Gently decelerate ground scrolling so finish signpost settles on screen
+            if (this.currentSpeed > 0) {
+                this.currentSpeed = Math.max(0, this.currentSpeed - 0.12);
+            }
+            const scrollSpeed = this.currentSpeed;
+
             this.world.update(scrollSpeed);
             this.victoryBannerX -= scrollSpeed;
             this.distance = Math.min(this.goalDistance, this.distance + scrollSpeed * 0.04);
 
-            // 2. JoJo walks smoothly forward past the finish line marker
-            this.player.isGrounded = true;
-            this.player.isCrawlingUnderBench = false;
-            this.player.state = 'WALK';
-            this.player.update({}, [], scrollSpeed);
-            this.player.x += 0.8;
-
-            // 3. Move remaining obstacles harmlessly offscreen
+            // Move remaining obstacles harmlessly offscreen
             for (let i = this.obstacles.length - 1; i >= 0; i--) {
                 const obs = this.obstacles[i];
                 obs.update(scrollSpeed);
@@ -615,16 +658,55 @@ export class Game {
                 }
             }
 
-            // 4. Update HUD
-            this.updateHUD();
-
-            // When JoJo has walked a few steps (~1.2s), transition to joy hopping
-            if (this.winTimer >= 72) {
-                this.winPhase = 'JOY_HOP';
-                this.winTimer = 0;
-                this.player.startVictoryJoy();
-                this.currentSpeed = 0;
+            // Physics with controls disconnected (empty keys: as if player removed hand from keyboard):
+            // A. If crossing finish line while in the air, complete jump arc and land naturally:
+            if (!this.player.isGrounded) {
+                this.player.vy += this.player.gravity;
+                this.player.y += this.player.vy;
+                if (this.player.y >= this.player.groundY) {
+                    this.player.y = this.player.groundY;
+                    this.player.vy = 0;
+                    this.player.isGrounded = true;
+                    this.player.state = 'WALK';
+                    sounds.playStep();
+                } else {
+                    this.player.state = 'JUMP';
+                }
+            } else if (this.player.state === 'CRAWL') {
+                // B. If crawling, naturally rise into walk since Down Arrow is no longer pressed
+                this.player.isCrawlingUnderBench = false;
+                this.player.state = 'WALK';
             }
+
+            // C. Once grounded, walk toward the edge of the screen about 2 sprite lengths
+            if (this.player.isGrounded) {
+                if (this.winWalkStartX === null) {
+                    this.winWalkStartX = this.player.x;
+                    const walkDistance = this.player.normalWidth * 2; // ~184px (2 sprite lengths)
+                    this.winWalkTargetX = Math.min(this.canvas.width - this.player.normalWidth - 30, this.winWalkStartX + walkDistance);
+                }
+
+                this.player.state = 'WALK';
+                this.player.x += 2.6; // Brisk forward walk toward the screen edge
+
+                // Step walk animation frames
+                this.player.animTimer += 0.065 * 4.0;
+                if (this.player.animTimer >= 1.0) {
+                    this.player.animTimer = 0;
+                    this.player.walkFrame = (this.player.walkFrame + 1) % 8;
+                }
+
+                // When JoJo has walked the 2 sprite lengths, transition to happy bouncing dance
+                if (this.player.x >= this.winWalkTargetX) {
+                    this.winPhase = 'JOY_HOP';
+                    this.winTimer = 0;
+                    this.player.startVictoryJoy();
+                    this.currentSpeed = 0;
+                }
+            }
+
+            // Update HUD
+            this.updateHUD();
             return;
         }
 
@@ -632,14 +714,18 @@ export class Game {
             this.winTimer++;
             this.currentSpeed = 0;
 
-            // JoJo makes small hops back and forth in joy using stand_0
+            // JoJo does the happy bouncing dance (higher bounce)
             this.player.update({}, [], 0);
 
-            // Screen fades to black over ~75 frames
-            this.winFadeAlpha = Math.min(1.0, this.winTimer / 75);
+            // Let JoJo bounce happily in full view for ~65 frames (~2.7 hops) before fading to black
+            if (this.winTimer < 65) {
+                this.winFadeAlpha = 0.0;
+            } else {
+                this.winFadeAlpha = Math.min(1.0, (this.winTimer - 65) / 45);
+            }
 
-            // Once fully black, show victory screen and fade in victory music
-            if (this.winTimer >= 90 && this.winFadeAlpha >= 1.0) {
+            // Once fully black, show victory newspaper screen and play happy music
+            if (this.winTimer >= 115 && this.winFadeAlpha >= 1.0) {
                 this.stageClear();
             }
             return;
@@ -689,8 +775,9 @@ export class Game {
             }
         }
 
-        // 4. Obstacle Spawning
-        if (this.victoryBannerX === -999) {
+        // 4. Obstacle Spawning (no benches, holes, or enemies in the last 50 meters of the course)
+        const inLast50m = (this.difficulty !== 'endless' && this.distance >= this.goalDistance - 50);
+        if (this.victoryBannerX === -999 && !inLast50m) {
             this.spawnTimer--;
             if (this.spawnTimer <= 0) {
                 this.spawnObstaclePattern();
@@ -830,7 +917,13 @@ export class Game {
         sounds.playGameOver();
         this.keys = {}; // Reset all input keys
 
-        document.getElementById('gameoverOverlay').classList.remove('hidden');
+        const goOverlay = document.getElementById('gameoverOverlay');
+        if (goOverlay) {
+            goOverlay.classList.remove('hidden');
+            goOverlay.classList.remove('fade-in-from-black');
+            void goOverlay.offsetWidth;
+            goOverlay.classList.add('fade-in-from-black');
+        }
     }
 
     updateHUD() {
@@ -850,7 +943,7 @@ export class Game {
             if (this.difficulty === 'endless') {
                 distEl.textContent = `${Math.floor(this.distance)}m`;
             } else {
-                distEl.textContent = `${Math.min(1000, Math.floor(this.distance))} / 1000m`;
+                distEl.textContent = `${Math.min(this.goalDistance, Math.floor(this.distance))} / ${this.goalDistance}m`;
             }
         }
 
@@ -917,10 +1010,11 @@ export class Game {
         }
         this.ctx.globalAlpha = 1.0;
 
-        // 8. Cinematic Screen Fade to Black
-        if (this.winFadeAlpha > 0) {
+        // 8. Cinematic Screen Fade to Black (Victory & Loss)
+        const blackAlpha = Math.max(this.winFadeAlpha || 0, this.lossFadeAlpha || 0);
+        if (blackAlpha > 0) {
             this.ctx.fillStyle = '#000000';
-            this.ctx.globalAlpha = Math.min(1.0, Math.max(0.0, this.winFadeAlpha));
+            this.ctx.globalAlpha = Math.min(1.0, Math.max(0.0, blackAlpha));
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
             this.ctx.globalAlpha = 1.0;
         }

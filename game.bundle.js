@@ -715,7 +715,7 @@ class MangyCat {
             this.y = this.benchRef.y + this.benchRef.seatOffset;
             this.jumpCooldown--;
             if (this.jumpCooldown <= 0) {
-                this.startFirstJump();
+                this.startFirstJump(scrollSpeed, playerX);
             }
         } else if (this.state !== 'LEAP') {
             this.x -= scrollSpeed;
@@ -724,9 +724,9 @@ class MangyCat {
         // State Machine
         if (this.state === 'SPAWN_PREP') {
             this.spawnPrepTimer--;
-            this.facing = 'left';
+            this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
             if (this.spawnPrepTimer <= 0) {
-                this.startFirstJump();
+                this.startFirstJump(scrollSpeed, playerX);
             }
         } else if (this.state === 'LEAP') {
             this.x += this.vx - scrollSpeed;
@@ -812,17 +812,23 @@ class MangyCat {
         }
     }
 
-    startFirstJump() {
+    startFirstJump(scrollSpeed = 5.0, playerX = null) {
         this.jumpStep = 1;
         this.state = 'LEAP';
         sounds.playCatSwipe();
         this.onBench = false;
         this.benchRef = null;
 
-        // Immediately jump forward into the screen toward JoJo
         this.vy = -11.5;
-        this.vx = -4.5;
-        this.facing = 'left';
+        if (playerX !== null && playerX > this.x + 20) {
+            // JoJo is already ahead: bounce forward faster than scroll speed
+            this.vx = scrollSpeed + 4.0;
+            this.facing = 'right';
+        } else {
+            // Immediately jump forward into the screen toward JoJo
+            this.vx = -4.5;
+            this.facing = 'left';
+        }
     }
 
     startCalculatedPounce(scrollSpeed, playerX) {
@@ -838,24 +844,43 @@ class MangyCat {
 
         // Pounce directly at JoJo's position
         const targetX = playerX + 25;
-        const requiredVx = scrollSpeed + (targetX - this.x) / airTime;
+        const dx = targetX - this.x;
 
-        this.vx = Math.min(-1.5, Math.max(-8.5, requiredVx));
-        this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
+        if (dx > 0) {
+            // JoJo is ahead of the cat (cat was passed or landed behind JoJo).
+            // Bounce forward at faster than scroll speed to get a second chance at hitting JoJo!
+            const forwardSpeedNeeded = dx / airTime;
+            const extraForward = Math.max(3.8, Math.min(7.2, forwardSpeedNeeded + 1.5));
+            this.vx = scrollSpeed + extraForward;
+            this.facing = 'right';
+        } else {
+            // JoJo is in front of the cat (to the left)
+            const requiredVx = scrollSpeed + dx / airTime;
+            this.vx = Math.max(-8.5, Math.min(-2.5, requiredVx));
+            this.facing = 'left';
+        }
     }
 
-    startBackwardJump(scrollSpeed, playerX) {
+    startThirdJump(scrollSpeed, playerX) {
         this.jumpStep = 3;
         this.state = 'LEAP';
         sounds.playCatSwipe();
         this.onBench = false;
         this.benchRef = null;
 
-        // Jump backward a third time with very little rest time
         this.vy = -11.5;
-        // Vaults backward to the right overcoming scroll speed
-        this.vx = scrollSpeed + 4.5;
-        this.facing = (playerX <= this.x + 20) ? 'left' : 'right';
+        if (playerX > this.x + 20) {
+            // Vaults forward to the right faster than scroll speed
+            this.vx = scrollSpeed + 4.8;
+            this.facing = 'right';
+        } else {
+            this.vx = -4.5;
+            this.facing = 'left';
+        }
+    }
+
+    startBackwardJump(scrollSpeed, playerX) {
+        this.startThirdJump(scrollSpeed, playerX);
     }
 
     getHitbox() {
@@ -1320,19 +1345,19 @@ class Player {
 
         if (this.state === 'VICTORY_JOY') {
             this.joyHopTimer++;
-            const hopPeriod = 22; // ~0.36s per hop cycle
+            const hopPeriod = 24; // ~0.4s per hop cycle
             const hopPhase = (this.joyHopTimer % hopPeriod) / hopPeriod;
             const hopIndex = Math.floor(this.joyHopTimer / hopPeriod);
 
-            // Sine parabolic bounce
-            const hopHeight = 22;
+            // Sine parabolic bounce - higher bounce per user request
+            const hopHeight = 36; // Raised from 22 to 36 (a little higher than current)
             const hopOffsetY = Math.sin(hopPhase * Math.PI) * hopHeight;
             this.y = this.groundY - hopOffsetY;
 
             // Small hops back and forth:
             // Hop 0: hops slightly forward, Hop 1: hops back, Hop 2: forward, Hop 3: back
             const hopDir = (hopIndex % 2 === 0) ? 1 : -1;
-            const hopDistance = 12;
+            const hopDistance = 14;
             const hopOffsetX = Math.sin(hopPhase * Math.PI) * hopDistance * hopDir;
             this.x = this.joyBaseX + hopOffsetX;
 
@@ -1535,8 +1560,8 @@ class Player {
     }
 
     draw(ctx) {
-        // Flicker if invulnerable (do not flicker during victory sequences)
-        if (this.state !== 'VICTORY_JOY' && this.invulnerableTimer > 0 && this.invulnerableTimer < 9000 && Math.floor(this.invulnerableTimer / 5) % 2 === 0) {
+        // Flicker if invulnerable (do not flicker during victory sequences or when dead)
+        if (this.state !== 'VICTORY_JOY' && !this.isDead && this.invulnerableTimer > 0 && this.invulnerableTimer < 9000 && Math.floor(this.invulnerableTimer / 5) % 2 === 0) {
             return;
         }
 
@@ -1571,7 +1596,7 @@ class Player {
         if (this.state === 'VICTORY_JOY') {
             const h = this.normalHeight;
             const w = 76; // Preserves stand_0 proportion
-            const hopPeriod = 22;
+            const hopPeriod = 24;
             const hopIndex = Math.floor(this.joyHopTimer / hopPeriod);
             const hopPhase = (this.joyHopTimer % hopPeriod) / hopPeriod;
 
@@ -1913,10 +1938,10 @@ class Game {
 
         // Difficulty configs (Equalized bacon frequency across levels, with Easy vs Difficult balancing)
         this.diffConfigs = {
-            easy: { baseSpeed: 4.4, spawnMin: 140, spawnMax: 195, baconRate: 0.55, difficultBaconChance: 0.15 },
-            medium: { baseSpeed: 5.6, spawnMin: 100, spawnMax: 145, baconRate: 0.55, difficultBaconChance: 0.55 },
-            hard: { baseSpeed: 7.2, spawnMin: 70, spawnMax: 110, baconRate: 0.55, difficultBaconChance: 0.90 },
-            endless: { baseSpeed: 5.0, spawnMin: 90, spawnMax: 135, baconRate: 0.55, difficultBaconChance: 0.35 }
+            easy: { baseSpeed: 4.4, spawnMin: 140, spawnMax: 195, baconRate: 0.55, difficultBaconChance: 0.15, goalDistance: 900 },
+            medium: { baseSpeed: 5.6, spawnMin: 100, spawnMax: 145, baconRate: 0.55, difficultBaconChance: 0.55, goalDistance: 1000 },
+            hard: { baseSpeed: 7.2, spawnMin: 70, spawnMax: 110, baconRate: 0.55, difficultBaconChance: 0.90, goalDistance: 1200 },
+            endless: { baseSpeed: 5.0, spawnMin: 90, spawnMax: 135, baconRate: 0.55, difficultBaconChance: 0.35, goalDistance: Infinity }
         };
 
         this.currentSpeed = 5.6;
@@ -1939,6 +1964,13 @@ class Game {
         this.winPhase = null;
         this.winTimer = 0;
         this.winFadeAlpha = 0.0;
+        this.winWalkStartX = null;
+        this.winWalkTargetX = null;
+
+        // Loss transition elements
+        this.lossPhase = null;
+        this.lossTimer = 0;
+        this.lossFadeAlpha = 0.0;
 
         // Interactive Controls Card Cycling
         this.controlCycleTimer = null;
@@ -1964,8 +1996,8 @@ class Game {
             {
                 name: 'MANGY CAT (TUXEDO)',
                 sprite: 'assets/sprites/cat/mangy/cat_stand_1.png',
-                desc: 'Twitches nervously, rocks back and forth, then catapults in a high airborne leap right at you!',
-                tip: 'Surge forward under his flight arc, or wait and jump clean as he lands.'
+                desc: 'Twitches nervously, leaps into the trail, then bounces forward faster than scroll speed to chase JoJo down!',
+                tip: 'Leap clean over him or stay ahead—he can spring forward from behind for a dangerous second chance!'
             },
             {
                 name: 'BUSH BANDIT SQUIRREL',
@@ -2008,15 +2040,15 @@ class Game {
                 e.preventDefault();
             }
 
-            // If in cinematic win sequence, user has lost control
-            if (this.winPhase !== null) {
+            // If in cinematic win or loss sequence, user has lost control
+            if (this.winPhase !== null || this.lossPhase !== null) {
                 if (e.code === 'KeyM') {
                     this.toggleMute();
                 }
                 if (e.code === 'KeyF') {
                     this.toggleFullscreen();
                 }
-                if ((e.code === 'Enter' || e.code === 'NumpadEnter') && this.state === 'STAGE_CLEAR') {
+                if ((e.code === 'Enter' || e.code === 'NumpadEnter') && (this.state === 'STAGE_CLEAR' || this.state === 'GAME_OVER')) {
                     this.returnToMenu();
                 }
                 return;
@@ -2068,7 +2100,7 @@ class Game {
         });
 
         window.addEventListener('keyup', (e) => {
-            if (this.winPhase !== null) return;
+            if (this.winPhase !== null || this.lossPhase !== null) return;
             this.keys[e.code] = false;
         });
 
@@ -2195,11 +2227,17 @@ class Game {
         this.winPhase = null;
         this.winTimer = 0;
         this.winFadeAlpha = 0.0;
+        this.winWalkStartX = null;
+        this.winWalkTargetX = null;
+        this.lossPhase = null;
+        this.lossTimer = 0;
+        this.lossFadeAlpha = 0.0;
         this.keys = {}; // Clear any stuck input keys
         this.spawnTimer = 80;
 
         const config = this.diffConfigs[this.difficulty] || this.diffConfigs['medium'];
         this.currentSpeed = config.baseSpeed;
+        this.goalDistance = config.goalDistance || 1000;
 
         // Fresh instances guarantee 100% clean initial state with zero stale properties
         this.player = new Player(this.canvas);
@@ -2221,6 +2259,7 @@ class Game {
 
         const config = this.diffConfigs[this.difficulty] || this.diffConfigs['medium'];
         this.currentSpeed = config.baseSpeed;
+        this.goalDistance = config.goalDistance || 1000;
         this.spawnTimer = Math.floor(config.spawnMin * 0.75);
 
         this.resetLoopTiming();
@@ -2437,17 +2476,24 @@ class Game {
         }
     }
 
+    startLossSequence() {
+        if (this.lossPhase !== null) return;
+        this.lossPhase = 'FADE_OUT';
+        this.lossTimer = 0;
+        this.lossFadeAlpha = 0.0;
+        this.keys = {}; // Relinquish player control
+        sounds.fadeOutMusic(800);
+    }
+
     startWinSequence() {
         this.winPhase = 'WALK_OUT';
         this.winTimer = 0;
         this.winFadeAlpha = 0.0;
-        this.keys = {}; // Relinquish player control
+        this.keys = {}; // Force all control keys (arrows) to lose connection as if player removed hand from keyboard
         this.player.invulnerableTimer = 99999;
-        this.player.currentPlatform = null;
-        this.player.isGrounded = true;
-        this.player.y = this.player.groundY;
-        this.player.vy = 0;
-        sounds.fadeOutMusic(1500);
+        this.winWalkStartX = null;
+        this.winWalkTargetX = null;
+        sounds.fadeOutMusic(1600);
     }
 
     update() {
@@ -2463,31 +2509,53 @@ class Game {
             return;
         }
 
+        // Loss Transition Sequence (fade screen to black before lost dog poster)
+        if (this.lossPhase === 'FADE_OUT') {
+            this.lossTimer++;
+            this.currentSpeed = Math.max(0, this.currentSpeed * 0.90);
+            this.world.update(this.currentSpeed);
+
+            // Allow any airborne drop to land naturally on ground
+            if (!this.player.isGrounded) {
+                this.player.vy += this.player.gravity;
+                this.player.y += this.player.vy;
+                if (this.player.y >= this.player.groundY) {
+                    this.player.y = this.player.groundY;
+                    this.player.vy = 0;
+                    this.player.isGrounded = true;
+                }
+            }
+
+            // Smoothly fade screen to black over ~45 frames (0.75s)
+            this.lossFadeAlpha = Math.min(1.0, this.lossTimer / 45);
+
+            // Once fully black, trigger Game Over modal with lost dog poster
+            if (this.lossTimer >= 48 && this.lossFadeAlpha >= 1.0) {
+                this.gameOver();
+            }
+            return;
+        }
+
         if (this.player.isDead) {
-            this.gameOver();
+            this.startLossSequence();
             return;
         }
 
         // Win Transition Sequence: Phase 1 (Walk Out) & Phase 2 (Joy Hop)
         if (this.winPhase === 'WALK_OUT') {
             this.winTimer++;
-            const config = this.diffConfigs[this.difficulty] || this.diffConfigs['medium'];
-            const scrollSpeed = config.baseSpeed * 0.85;
-            this.currentSpeed = scrollSpeed;
 
-            // 1. Update World parallax and signpost
+            // Gently decelerate ground scrolling so finish signpost settles on screen
+            if (this.currentSpeed > 0) {
+                this.currentSpeed = Math.max(0, this.currentSpeed - 0.12);
+            }
+            const scrollSpeed = this.currentSpeed;
+
             this.world.update(scrollSpeed);
             this.victoryBannerX -= scrollSpeed;
             this.distance = Math.min(this.goalDistance, this.distance + scrollSpeed * 0.04);
 
-            // 2. JoJo walks smoothly forward past the finish line marker
-            this.player.isGrounded = true;
-            this.player.isCrawlingUnderBench = false;
-            this.player.state = 'WALK';
-            this.player.update({}, [], scrollSpeed);
-            this.player.x += 0.8;
-
-            // 3. Move remaining obstacles harmlessly offscreen
+            // Move remaining obstacles harmlessly offscreen
             for (let i = this.obstacles.length - 1; i >= 0; i--) {
                 const obs = this.obstacles[i];
                 obs.update(scrollSpeed);
@@ -2496,16 +2564,55 @@ class Game {
                 }
             }
 
-            // 4. Update HUD
-            this.updateHUD();
-
-            // When JoJo has walked a few steps (~1.2s), transition to joy hopping
-            if (this.winTimer >= 72) {
-                this.winPhase = 'JOY_HOP';
-                this.winTimer = 0;
-                this.player.startVictoryJoy();
-                this.currentSpeed = 0;
+            // Physics with controls disconnected (empty keys: as if player removed hand from keyboard):
+            // A. If crossing finish line while in the air, complete jump arc and land naturally:
+            if (!this.player.isGrounded) {
+                this.player.vy += this.player.gravity;
+                this.player.y += this.player.vy;
+                if (this.player.y >= this.player.groundY) {
+                    this.player.y = this.player.groundY;
+                    this.player.vy = 0;
+                    this.player.isGrounded = true;
+                    this.player.state = 'WALK';
+                    sounds.playStep();
+                } else {
+                    this.player.state = 'JUMP';
+                }
+            } else if (this.player.state === 'CRAWL') {
+                // B. If crawling, naturally rise into walk since Down Arrow is no longer pressed
+                this.player.isCrawlingUnderBench = false;
+                this.player.state = 'WALK';
             }
+
+            // C. Once grounded, walk toward the edge of the screen about 2 sprite lengths
+            if (this.player.isGrounded) {
+                if (this.winWalkStartX === null) {
+                    this.winWalkStartX = this.player.x;
+                    const walkDistance = this.player.normalWidth * 2; // ~184px (2 sprite lengths)
+                    this.winWalkTargetX = Math.min(this.canvas.width - this.player.normalWidth - 30, this.winWalkStartX + walkDistance);
+                }
+
+                this.player.state = 'WALK';
+                this.player.x += 2.6; // Brisk forward walk toward the screen edge
+
+                // Step walk animation frames
+                this.player.animTimer += 0.065 * 4.0;
+                if (this.player.animTimer >= 1.0) {
+                    this.player.animTimer = 0;
+                    this.player.walkFrame = (this.player.walkFrame + 1) % 8;
+                }
+
+                // When JoJo has walked the 2 sprite lengths, transition to happy bouncing dance
+                if (this.player.x >= this.winWalkTargetX) {
+                    this.winPhase = 'JOY_HOP';
+                    this.winTimer = 0;
+                    this.player.startVictoryJoy();
+                    this.currentSpeed = 0;
+                }
+            }
+
+            // Update HUD
+            this.updateHUD();
             return;
         }
 
@@ -2513,14 +2620,18 @@ class Game {
             this.winTimer++;
             this.currentSpeed = 0;
 
-            // JoJo makes small hops back and forth in joy using stand_0
+            // JoJo does the happy bouncing dance (higher bounce)
             this.player.update({}, [], 0);
 
-            // Screen fades to black over ~75 frames
-            this.winFadeAlpha = Math.min(1.0, this.winTimer / 75);
+            // Let JoJo bounce happily in full view for ~65 frames (~2.7 hops) before fading to black
+            if (this.winTimer < 65) {
+                this.winFadeAlpha = 0.0;
+            } else {
+                this.winFadeAlpha = Math.min(1.0, (this.winTimer - 65) / 45);
+            }
 
-            // Once fully black, show victory screen and fade in victory music
-            if (this.winTimer >= 90 && this.winFadeAlpha >= 1.0) {
+            // Once fully black, show victory newspaper screen and play happy music
+            if (this.winTimer >= 115 && this.winFadeAlpha >= 1.0) {
                 this.stageClear();
             }
             return;
@@ -2570,8 +2681,9 @@ class Game {
             }
         }
 
-        // 4. Obstacle Spawning
-        if (this.victoryBannerX === -999) {
+        // 4. Obstacle Spawning (no benches, holes, or enemies in the last 50 meters of the course)
+        const inLast50m = (this.difficulty !== 'endless' && this.distance >= this.goalDistance - 50);
+        if (this.victoryBannerX === -999 && !inLast50m) {
             this.spawnTimer--;
             if (this.spawnTimer <= 0) {
                 this.spawnObstaclePattern();
@@ -2711,7 +2823,13 @@ class Game {
         sounds.playGameOver();
         this.keys = {}; // Reset all input keys
 
-        document.getElementById('gameoverOverlay').classList.remove('hidden');
+        const goOverlay = document.getElementById('gameoverOverlay');
+        if (goOverlay) {
+            goOverlay.classList.remove('hidden');
+            goOverlay.classList.remove('fade-in-from-black');
+            void goOverlay.offsetWidth;
+            goOverlay.classList.add('fade-in-from-black');
+        }
     }
 
     updateHUD() {
@@ -2731,7 +2849,7 @@ class Game {
             if (this.difficulty === 'endless') {
                 distEl.textContent = `${Math.floor(this.distance)}m`;
             } else {
-                distEl.textContent = `${Math.min(1000, Math.floor(this.distance))} / 1000m`;
+                distEl.textContent = `${Math.min(this.goalDistance, Math.floor(this.distance))} / ${this.goalDistance}m`;
             }
         }
 
@@ -2798,10 +2916,11 @@ class Game {
         }
         this.ctx.globalAlpha = 1.0;
 
-        // 8. Cinematic Screen Fade to Black
-        if (this.winFadeAlpha > 0) {
+        // 8. Cinematic Screen Fade to Black (Victory & Loss)
+        const blackAlpha = Math.max(this.winFadeAlpha || 0, this.lossFadeAlpha || 0);
+        if (blackAlpha > 0) {
             this.ctx.fillStyle = '#000000';
-            this.ctx.globalAlpha = Math.min(1.0, Math.max(0.0, this.winFadeAlpha));
+            this.ctx.globalAlpha = Math.min(1.0, Math.max(0.0, blackAlpha));
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
             this.ctx.globalAlpha = 1.0;
         }
